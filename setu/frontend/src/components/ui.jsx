@@ -50,7 +50,7 @@ export function LevelDots({ level, max = 5 }) {
 
 export const LEVEL_NAMES = ["", "Aware", "Beginner", "Working", "Proficient", "Expert"];
 
-export function SkillChip({ name, level, verified, tone = "petal", onClick }) {
+export function SkillChip({ name, level, verified, tone = "petal", onClick, onRemove }) {
   const tones = {
     petal: "bg-petal text-plum",
     teal: "bg-teal/15 text-teal",
@@ -58,12 +58,42 @@ export function SkillChip({ name, level, verified, tone = "petal", onClick }) {
     red: "bg-signal/10 text-signal",
     plum: "bg-plum text-cream",
   };
-  const Tag = onClick ? "button" : "span";
+  const isClickable = Boolean(onClick || onRemove);
+  const Tag = isClickable ? "button" : "span";
+  const handleClick = onRemove || onClick;
   return (
-    <Tag type={onClick ? "button" : undefined} onClick={onClick} className={`chip ${tones[tone]} ${onClick ? "hover:ring-2 hover:ring-violet/40" : ""}`}>
-      {name}
+    <Tag
+      type={isClickable ? "button" : undefined}
+      onClick={handleClick}
+      className={`chip ${tones[tone]} ${isClickable ? "hover:ring-2 hover:ring-violet/40 cursor-pointer" : ""}`}
+    >
+      <span>{name}</span>
       {level ? <LevelDots level={level} /> : null}
-      {verified ? <span title="verified by faculty" className="ml-0.5 font-mono text-[10px]">v</span> : null}
+      {verified ? (
+        <span
+          title="verified by faculty"
+          className="ml-1 inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-petal font-mono text-[9px] font-bold leading-none text-plum"
+        >
+          v
+        </span>
+      ) : null}
+      {onRemove && (
+        <span
+          aria-hidden="true"
+          className="ml-1 -mr-0.5 inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full hover:bg-white/20 transition-colors"
+        >
+          <svg
+            className="h-2.5 w-2.5"
+            viewBox="0 0 12 12"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+          >
+            <path d="M2.5 2.5l7 7M9.5 2.5l-7 7" />
+          </svg>
+        </span>
+      )}
     </Tag>
   );
 }

@@ -5,10 +5,12 @@
 @layer base {
   html {
     scroll-behavior: smooth;
+    overflow-x: hidden;
   }
   body {
     background-color: #f7f2e9;
     color: #2e2136;
+    overflow-x: hidden;
   }
   ::selection {
     background: #ebd2da;

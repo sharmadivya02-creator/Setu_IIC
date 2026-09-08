@@ -129,6 +129,8 @@ async def parse_resume(
     user: User = Depends(require_role("student")),
     db: Session = Depends(get_db),
 ):
+    if user is None:
+        raise HTTPException(401, "Authentication required.")
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(400, "Only PDF files are supported. Please upload a valid .pdf file.")
 

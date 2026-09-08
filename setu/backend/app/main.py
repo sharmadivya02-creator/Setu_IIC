@@ -8,7 +8,7 @@ from .routers import auth, faculty, recruiters, skills, students
 app = FastAPI(
     title="Setu API",
     version="1.0.0",
-    description="Skill-mapping and placement platform. Students, faculty and recruiters share one matching engine.",
+    description="Skill-mapping and placement platform. Students, placement coordinators and recruiters share one matching engine.",
 )
 
 app.add_middleware(GZipMiddleware, minimum_size=1000)

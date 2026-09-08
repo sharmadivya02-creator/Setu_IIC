@@ -19,7 +19,7 @@ function Hero({ progress, reduced }) {
           <div className="label text-cream/80">a bridge between classroom and market</div>
           <h1 className="font-display text-[22vw] leading-[0.85] md:text-[13rem]">Setu</h1>
           <p className="mt-4 max-w-md text-lg text-cream/90">
-            Students see which skills the market pays for. Faculty see who is placement-ready. Companies find the students who actually match.
+            Students see which skills the market pays for. Placement coordinators see who is placement-ready. Companies find the students who actually match.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link to="/login" className="btn bg-cream text-plum hover:bg-petal">
@@ -50,7 +50,7 @@ function Intro({ progress, reduced }) {
 
   const cards = [
     { title: "Students", text: "A structured skill profile, levels 1 to 5, matched against every live opening with the reason for every score.", color: "#7285C2" },
-    { title: "Faculty", text: "Batch-level gap analytics. Docker is required by 48% of postings and held ready by 15% of your batch. Now you know what to teach.", color: "#95709F" },
+    { title: "Placement Coordinator", text: "Batch-level gap analytics. Docker is required by 48% of postings and held ready by 15% of your batch. Now you know what to teach.", color: "#95709F" },
     { title: "Recruiters", text: "Post required skills with minimum levels and get a ranked list of students who actually fit, with what each one is missing.", color: "#2F9599" },
   ];
 

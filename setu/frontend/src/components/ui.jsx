@@ -71,7 +71,7 @@ export function SkillChip({ name, level, verified, tone = "petal", onClick, onRe
     >
       <span>{name}</span>
       {level ? <LevelDots level={level} /> : null}
-      {verified ? <span title="verified by faculty" className="ml-0.5 font-mono text-[10px]">v</span> : null}
+      {verified ? <span title="verified by placement coordinator" className="ml-0.5 font-mono text-[10px]">v</span> : null}
       {tone === "periwinkle" ? <span title="AI-matched: found using a sentence-embedding model, not an exact name match" className="ml-1 font-mono text-[9px]" aria-hidden="true">✦AI</span> : null}
     </Tag>
   );
@@ -177,7 +177,7 @@ export function ScoreBreakdown({ match }) {
         ))}
       </div>
       <p className="text-xs text-plum/60">
-        Score = weighted credit / total weight. Must-have skills weigh 3, nice-to-have weigh 1. Credit per skill = min(1, your level / needed level), times 1.1 if faculty verified it.
+        Score = weighted credit / total weight. Must-have skills weigh 3, nice-to-have weigh 1. Credit per skill = min(1, your level / needed level), times 1.1 if placement coordinator verified it.
         {related.length > 0 && " A skill you do not have can earn up to 0.4 credit if you know a semantically similar one — measured by embedding similarity, and only the single closest skill counts."}
       </p>
     </div>

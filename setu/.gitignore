@@ -23,6 +23,19 @@ venv/
 sample_resume.pdf
 *.sample.pdf
 
+# Presentations and PPT artifacts
+*.pptx
+*.ppt
+ppt/
+*preview*/
+extracted_images/
+template_preview/
+generated_preview/
+generated_preview_guizang/
+
+# Image files
+*.png
+
 # Editor & OS files
 .DS_Store
 Thumbs.db

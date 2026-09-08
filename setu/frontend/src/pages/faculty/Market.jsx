@@ -55,7 +55,7 @@ export default function FacultyMarket() {
         <h2 className="font-display text-2xl">How the importer works</h2>
         <p>The backend calls a free public job-board API, reads each posting's title, description and tags, and matches them against Setu's own skill taxonomy with simple keyword patterns.</p>
         <p>A skill mentioned twice or more becomes a must-have at level 3; mentioned once becomes nice-to-have at level 2. Postings with fewer than two recognised skills are skipped so the demand signal stays clean.</p>
-        <p>Imported postings are stored with source = market. Students see them scored like any other opening but apply on the company site; faculty analytics count them as demand. The importer is a plain module, so a LinkedIn or Naukri partner feed would plug in at the same place.</p>
+        <p>Imported postings are stored with source = market. Students see them scored like any other opening but apply on the company site; placement coordinator analytics count them as demand. The importer is a plain module, so a LinkedIn or Naukri partner feed would plug in at the same place.</p>
         {lastRun && (
           <div className="rounded-2xl bg-petal/60 p-3 font-mono text-xs">
             last run: imported {lastRun.imported}, skipped {lastRun.skipped}, market total {lastRun.total_market_postings}

@@ -25,7 +25,7 @@ from ..schemas import (
 )
 from .students import profile_out
 
-router = APIRouter(prefix="/faculty", tags=["faculty"], dependencies=[Depends(require_role("faculty"))])
+router = APIRouter(prefix="/faculty", tags=["placement coordinator"], dependencies=[Depends(require_role("faculty"))])
 
 
 def readiness_of(held, postings_requirements, adjacency=None, top: int = 5) -> float:

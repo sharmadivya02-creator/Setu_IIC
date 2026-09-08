@@ -33,7 +33,7 @@ function AuthFrame({ title, subtitle, children }) {
 
 const DEMO = [
   ["student@setu.demo", "Student"],
-  ["faculty@setu.demo", "Faculty"],
+  ["faculty@setu.demo", "Placement Coordinator"],
   ["recruiter@setu.demo", "Recruiter"],
 ];
 
@@ -133,7 +133,7 @@ export function Register() {
           <span className="label">I am a</span>
           <select className="input" value={form.role} onChange={update("role")}>
             <option value="student">Student</option>
-            <option value="faculty">Faculty / college admin</option>
+            <option value="faculty">Placement Coordinator / college admin</option>
             <option value="recruiter">Recruiter / company</option>
           </select>
         </label>

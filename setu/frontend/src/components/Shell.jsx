@@ -19,7 +19,7 @@ const NAV = {
   ],
 };
 
-const ROLE_TITLE = { student: "Student", faculty: "Faculty", recruiter: "Recruiter" };
+const ROLE_TITLE = { student: "Student", faculty: "Placement Coordinator", recruiter: "Recruiter" };
 
 export default function Shell() {
   const { user, signOut } = useAuth();

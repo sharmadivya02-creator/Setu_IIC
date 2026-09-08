@@ -6,7 +6,7 @@ import { useAuth, homeFor } from "../auth";
 function Hero({ progress, reduced }) {
   const y = useTransform(progress, [0, 1], ["0%", reduced ? "0%" : "-18%"]);
   const scale = useTransform(progress, [0, 1], [1, reduced ? 1 : 0.92]);
-  const opacity = useTransform(progress, [0, 0.7, 1], [1, 1, 0]);
+  const opacity = useTransform(progress, [0, 0.88, 1], [1, 1, 0]);
   const mascotX = useTransform(progress, [0, 1], ["0%", reduced ? "0%" : "12%"]);
   const mascotRotate = useTransform(progress, [0, 1], [-4, reduced ? -4 : 6]);
 
@@ -45,7 +45,7 @@ function Hero({ progress, reduced }) {
 
 function Intro({ progress, reduced }) {
   const scale = useTransform(progress, [0, 0.45, 1], [reduced ? 1 : 0.86, 1, 1]);
-  const opacity = useTransform(progress, [0, 0.35, 0.85, 1], [0, 1, 1, 0]);
+  const opacity = useTransform(progress, [0, 0.22, 0.9, 1], [0, 1, 1, 0]);
   const y = useTransform(progress, [0, 0.45], [reduced ? 0 : 80, 0]);
 
   const cards = [
@@ -81,7 +81,7 @@ function Intro({ progress, reduced }) {
 
 function Reveal({ progress, reduced, ctaTo }) {
   const scale = useTransform(progress, [0, 0.6], [reduced ? 1 : 0.7, 1]);
-  const opacity = useTransform(progress, [0, 0.3], [0, 1]);
+  const opacity = useTransform(progress, [0, 0.2], [0, 1]);
   const rotateX = useTransform(progress, [0, 0.6], [reduced ? 0 : 18, 0]);
 
   return (
@@ -159,13 +159,13 @@ export default function Landing() {
 
   return (
     <div className="bg-cream">
-      <div ref={heroRef} className="h-[160vh]">
+      <div ref={heroRef} className="h-[110vh]">
         <Hero progress={hero.scrollYProgress} reduced={reduced} />
       </div>
-      <div ref={introRef} className="h-[180vh]">
+      <div ref={introRef} className="h-[125vh]">
         <Intro progress={intro.scrollYProgress} reduced={reduced} />
       </div>
-      <div ref={revealRef} className="h-[170vh]">
+      <div ref={revealRef} className="h-[125vh]">
         <Reveal progress={reveal.scrollYProgress} reduced={reduced} ctaTo={ctaTo} />
       </div>
       <footer className="bg-plum px-6 py-8 text-center font-mono text-xs text-cream/60">Setu. Skill mapping and placement. Built at a hackathon.</footer>

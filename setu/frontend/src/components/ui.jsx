@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { api } from "../api";
 
 export function Ring({ value, size = 96, stroke = 9, color = "#2F9599", label, sublabel }) {
   const radius = (size - stroke) / 2;
@@ -57,6 +58,7 @@ export function SkillChip({ name, level, verified, tone = "petal", onClick, onRe
     amber: "bg-amber/15 text-amber",
     red: "bg-signal/10 text-signal",
     plum: "bg-plum text-cream",
+    periwinkle: "bg-periwinkle/15 text-periwinkle",
   };
   const isClickable = Boolean(onClick || onRemove);
   const Tag = isClickable ? "button" : "span";
@@ -69,31 +71,8 @@ export function SkillChip({ name, level, verified, tone = "petal", onClick, onRe
     >
       <span>{name}</span>
       {level ? <LevelDots level={level} /> : null}
-      {verified ? (
-        <span
-          title="verified by faculty"
-          className="ml-1 inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-petal font-mono text-[9px] font-bold leading-none text-plum"
-        >
-          v
-        </span>
-      ) : null}
-      {onRemove && (
-        <span
-          aria-hidden="true"
-          className="ml-1 -mr-0.5 inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full hover:bg-white/20 transition-colors"
-        >
-          <svg
-            className="h-2.5 w-2.5"
-            viewBox="0 0 12 12"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.2"
-            strokeLinecap="round"
-          >
-            <path d="M2.5 2.5l7 7M9.5 2.5l-7 7" />
-          </svg>
-        </span>
-      )}
+      {verified ? <span title="verified by faculty" className="ml-0.5 font-mono text-[10px]">v</span> : null}
+      {tone === "periwinkle" ? <span title="AI-matched: found using a sentence-embedding model, not an exact name match" className="ml-1 font-mono text-[9px]" aria-hidden="true">✦AI</span> : null}
     </Tag>
   );
 }
@@ -149,36 +128,121 @@ export function useToast() {
   return [show, element];
 }
 
+const DOT_TONE = { matched: "bg-teal", below: "bg-amber", related: "bg-periwinkle", missing: "bg-signal" };
+
 export function ScoreBreakdown({ match }) {
+  const related = match.related || [];
   const rows = [
     ...match.matched.map((row) => ({ ...row, state: "matched" })),
     ...match.below_level.map((row) => ({ ...row, state: "below" })),
+    ...related.map((row) => ({ ...row, state: "related" })),
     ...match.missing.map((row) => ({ ...row, state: "missing" })),
   ];
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="label">why this score</div>
-        {match.verified_bonus > 0 && <div className="font-mono text-xs text-teal">+{match.verified_bonus}% verified bonus</div>}
+        <div className="flex gap-3">
+          {match.verified_bonus > 0 && <div className="font-mono text-xs text-teal">+{match.verified_bonus}% verified bonus</div>}
+          {match.related_credit > 0 && (
+            <div className="flex items-center gap-1.5 font-mono text-xs text-periwinkle">
+              +{match.related_credit}% transferable skills
+              <AiBadge />
+            </div>
+          )}
+        </div>
       </div>
       <div className="grid gap-1.5">
         {rows.map((row) => (
-          <div key={row.skill_id} className="flex items-center justify-between rounded-xl bg-white/70 px-3 py-2 text-sm">
-            <div className="flex items-center gap-2">
-              <span className={`h-2 w-2 rounded-full ${row.state === "matched" ? "bg-teal" : row.state === "below" ? "bg-amber" : "bg-signal"}`} />
-              <span className="font-medium">{row.skill}</span>
-              <span className="font-mono text-[10px] uppercase tracking-wider text-violet">{row.importance === "must_have" ? "must" : "nice"}</span>
-              {row.verified && <span className="font-mono text-[10px] text-teal">verified</span>}
+          <div key={row.skill_id} className="rounded-xl bg-white/70 px-3 py-2 text-sm">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className={`h-2 w-2 shrink-0 rounded-full ${DOT_TONE[row.state]}`} />
+                <span className="font-medium">{row.skill}</span>
+                <span className="font-mono text-[10px] uppercase tracking-wider text-violet">{row.importance === "must_have" ? "must" : "nice"}</span>
+                {row.verified && <span className="font-mono text-[10px] text-teal">verified</span>}
+              </div>
+              <div className="shrink-0 font-mono text-xs text-plum/70">
+                {row.state === "missing" && `missing, needs L${row.needed}`}
+                {row.state === "related" && `${row.credit} credit of 1`}
+                {(row.state === "matched" || row.state === "below") && `L${row.level} of L${row.needed}${row.state === "below" ? " (below)" : ""}`}
+              </div>
             </div>
-            <div className="font-mono text-xs text-plum/70">
-              {row.state === "missing" ? `missing, needs L${row.needed}` : `L${row.level} of L${row.needed}${row.state === "below" ? " (below)" : ""}`}
-            </div>
+            {row.state === "related" && (
+              <div className="mt-1 pl-4 font-mono text-[10px] text-periwinkle">
+                you do not have this, but you know {row.via_skill} at L{row.via_level} — similarity {row.similarity}
+              </div>
+            )}
           </div>
         ))}
       </div>
       <p className="text-xs text-plum/60">
         Score = weighted credit / total weight. Must-have skills weigh 3, nice-to-have weigh 1. Credit per skill = min(1, your level / needed level), times 1.1 if faculty verified it.
+        {related.length > 0 && " A skill you do not have can earn up to 0.4 credit if you know a semantically similar one — measured by embedding similarity, and only the single closest skill counts."}
       </p>
+    </div>
+  );
+}
+
+export function AiBadge({ label = "AI-matched" }) {
+  return (
+    <span
+      title="Computed by a sentence-embedding AI model (all-MiniLM-L6-v2), not an exact skill-name match."
+      className="inline-flex items-center gap-1 rounded-full bg-periwinkle/15 px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider text-periwinkle"
+    >
+      <span aria-hidden="true">✦</span>
+      {label}
+    </span>
+  );
+}
+
+export function AiSimilarityMap({ requiredSkills }) {
+  const [rows, setRows] = useState(null);
+  const skillIds = requiredSkills.map((req) => req.skill_id).join(",");
+
+  useEffect(() => {
+    let cancelled = false;
+    setRows(null);
+    Promise.all(
+      requiredSkills.map((req) =>
+        api
+          .relatedSkills(req.skill_id)
+          .then((related) => ({ skill: req.skill, related }))
+          .catch(() => ({ skill: req.skill, related: [] }))
+      )
+    ).then((result) => {
+      if (!cancelled) setRows(result.filter((item) => item.related.length > 0));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [skillIds]);
+
+  if (rows === null) return <div className="text-xs text-plum/50">Loading AI similarity map…</div>;
+  if (rows.length === 0) return null;
+
+  return (
+    <div className="rounded-2xl border border-periwinkle/30 bg-periwinkle/10 p-3">
+      <div className="flex items-center gap-1.5 label text-periwinkle">
+        <span aria-hidden="true">✦</span> AI similarity map for this role
+      </div>
+      <p className="mt-1 text-[11px] text-plum/60">
+        Computed by a sentence-embedding model. Shows which skills the AI considers close to what this role needs, independent of your own profile.
+      </p>
+      <div className="mt-2 grid gap-1.5">
+        {rows.map((row) => (
+          <div key={row.skill} className="text-xs">
+            <span className="font-semibold">{row.skill}</span>
+            <span className="text-plum/60"> is close to </span>
+            {row.related.slice(0, 3).map((r, i) => (
+              <span key={r.skill_id} className="font-mono text-periwinkle">
+                {i > 0 && ", "}
+                {r.skill} ({r.similarity})
+              </span>
+            ))}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

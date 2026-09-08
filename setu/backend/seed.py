@@ -5,7 +5,20 @@ from sqlalchemy import delete
 from app.auth import hash_password
 from app.db import SessionLocal
 from app.market import refresh_market_postings
-from app.models import Application, Batch, College, Company, Posting, PostingSkill, Skill, Student, StudentSkill, User
+from app.models import (
+    Application,
+    Batch,
+    College,
+    Company,
+    Posting,
+    PostingSkill,
+    Skill,
+    SkillSimilarity,
+    Student,
+    StudentSkill,
+    User,
+)
+from app.similarity import build_pairs, load_vectors
 
 random.seed(42)
 
@@ -200,6 +213,24 @@ def run():
         print(f"market postings imported: {imported} (skipped {skipped})")
     except Exception as error:
         print(f"market import skipped, no network or API down: {error}")
+
+    # Build the skill similarity graph if embedding vectors are present.
+    # Absent vectors are not an error: scoring simply runs without
+    # transferable-skill credit, exactly as it did before that feature existed.
+    vectors = load_vectors()
+    if vectors:
+        pairs = build_pairs(vectors)
+        db.execute(delete(SkillSimilarity))
+        for name, other, score in pairs:
+            left, right = skills_by_name.get(name), skills_by_name.get(other)
+            if left is not None and right is not None:
+                db.add(SkillSimilarity(skill_id=left.id, related_skill_id=right.id, similarity=score))
+        db.commit()
+        print(f"skill graph: {len({tuple(sorted((a, b))) for a, b, _ in pairs})} related pairs")
+    else:
+        print("skill graph: no vectors found, transferable-skill credit is off")
+        print("  to enable: pip install sentence-transformers")
+        print("             python scripts/generate_skill_vectors.py")
 
     print(f"skills: {len(skills_by_name)}")
     print(f"students: {len(students) + 1}, postings: {len(postings)}")

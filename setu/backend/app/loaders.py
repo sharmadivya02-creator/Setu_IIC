@@ -2,11 +2,22 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from .engine import Held, Requirement
-from .models import Posting, PostingSkill, Skill, Student, StudentSkill
+from .models import Posting, PostingSkill, Skill, SkillSimilarity, Student, StudentSkill
 
 
 def skill_name_map(db: Session) -> dict[int, str]:
     return {skill_id: name for skill_id, name in db.execute(select(Skill.id, Skill.name))}
+
+
+def skill_adjacency(db: Session) -> dict[int, dict[int, float]]:
+   
+    adjacency: dict[int, dict[int, float]] = {}
+    rows = db.execute(
+        select(SkillSimilarity.skill_id, SkillSimilarity.related_skill_id, SkillSimilarity.similarity)
+    )
+    for skill_id, related_skill_id, similarity in rows:
+        adjacency.setdefault(skill_id, {})[related_skill_id] = similarity
+    return adjacency
 
 
 def held_skills_for_students(db: Session, student_ids: list[int]) -> dict[int, dict[int, Held]]:

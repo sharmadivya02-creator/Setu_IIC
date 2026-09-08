@@ -79,10 +79,19 @@ export default function StudentSkills() {
         <div className="mt-3 flex flex-wrap gap-2">
           {selected.length === 0 && <div className="text-sm text-plum/60">Nothing yet. Pick skills below.</div>}
           {selected.map((skill) => (
-            <SkillChip key={skill.id} name={skill.name} level={levels[skill.id]} verified={verifiedIds.has(skill.id) && levels[skill.id] === profile.skills.find((item) => item.skill_id === skill.id)?.level} tone="plum" onClick={() => setLevel(skill.id, 0)} />
+            <SkillChip key={skill.id} name={skill.name} level={levels[skill.id]} verified={verifiedIds.has(skill.id) && levels[skill.id] === profile.skills.find((item) => item.skill_id === skill.id)?.level} tone="plum" onRemove={() => setLevel(skill.id, 0)} />
           ))}
         </div>
       </section>
+
+      <div className="card-mauve flex flex-wrap items-center gap-4 text-xs text-plum/70">
+        <span className="label">levels</span>
+        {[1, 2, 3, 4, 5].map((value) => (
+          <span key={value} className="inline-flex items-center gap-1">
+            <LevelDots level={value} /> {LEVEL_NAMES[value]}
+          </span>
+        ))}
+      </div>
 
       <section className="card">
         <div className="grid gap-3 md:grid-cols-[1fr_auto]">
@@ -122,15 +131,6 @@ export default function StudentSkills() {
           })}
         </div>
       </section>
-
-      <div className="card-mauve flex flex-wrap items-center gap-4 text-xs text-plum/70">
-        <span className="label">levels</span>
-        {[1, 2, 3, 4, 5].map((value) => (
-          <span key={value} className="inline-flex items-center gap-1">
-            <LevelDots level={value} /> {LEVEL_NAMES[value]}
-          </span>
-        ))}
-      </div>
     </div>
   );
 }

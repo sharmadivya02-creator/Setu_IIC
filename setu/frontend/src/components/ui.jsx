@@ -51,7 +51,7 @@ export function LevelDots({ level, max = 5 }) {
 
 export const LEVEL_NAMES = ["", "Aware", "Beginner", "Working", "Proficient", "Expert"];
 
-export function SkillChip({ name, level, verified, tone = "petal", onClick }) {
+export function SkillChip({ name, level, verified, tone = "petal", onClick, onRemove }) {
   const tones = {
     petal: "bg-petal text-plum",
     teal: "bg-teal/15 text-teal",
@@ -60,10 +60,16 @@ export function SkillChip({ name, level, verified, tone = "petal", onClick }) {
     plum: "bg-plum text-cream",
     periwinkle: "bg-periwinkle/15 text-periwinkle",
   };
-  const Tag = onClick ? "button" : "span";
+  const isClickable = Boolean(onClick || onRemove);
+  const Tag = isClickable ? "button" : "span";
+  const handleClick = onRemove || onClick;
   return (
-    <Tag type={onClick ? "button" : undefined} onClick={onClick} className={`chip ${tones[tone]} ${onClick ? "hover:ring-2 hover:ring-violet/40" : ""}`}>
-      {name}
+    <Tag
+      type={isClickable ? "button" : undefined}
+      onClick={handleClick}
+      className={`chip ${tones[tone]} ${isClickable ? "hover:ring-2 hover:ring-violet/40 cursor-pointer" : ""}`}
+    >
+      <span>{name}</span>
       {level ? <LevelDots level={level} /> : null}
       {verified ? <span title="verified by faculty" className="ml-0.5 font-mono text-[10px]">v</span> : null}
       {tone === "periwinkle" ? <span title="AI-matched: found using a sentence-embedding model, not an exact name match" className="ml-1 font-mono text-[9px]" aria-hidden="true">✦AI</span> : null}

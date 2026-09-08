@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..auth import create_token, current_user, hash_password, verify_password
+from ..auth import cache_user, create_token, current_user, hash_password, verify_password
 from ..db import get_db
 from ..models import Batch, Company, Student, User
 from ..schemas import LoginIn, RegisterIn, TokenOut, UserOut
@@ -36,6 +36,7 @@ def register(body: RegisterIn, db: Session = Depends(get_db)):
     elif body.role == "recruiter":
         db.add(Company(name=body.company_name, recruiter_user_id=user.id))
     db.commit()
+    cache_user(user)
     return TokenOut(access_token=create_token(user), user=user_out(user))
 
 
@@ -44,6 +45,7 @@ def login(body: LoginIn, db: Session = Depends(get_db)):
     user = db.scalar(select(User).where(User.email == body.email))
     if user is None or not verify_password(body.password, user.password_hash):
         raise HTTPException(401, "Wrong email or password")
+    cache_user(user)
     return TokenOut(access_token=create_token(user), user=user_out(user))
 
 

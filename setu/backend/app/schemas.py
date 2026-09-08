@@ -42,6 +42,13 @@ class SkillOut(BaseModel):
     category: str
 
 
+class RelatedSkillOut(BaseModel):
+    skill_id: int
+    skill: str
+    category: str
+    similarity: float
+
+
 class BatchOut(BaseModel):
     id: int
     name: str
@@ -111,6 +118,8 @@ class MatchOut(BaseModel):
     matched: list[dict]
     below_level: list[dict]
     missing: list[dict]
+    related: list[dict] = []
+    related_credit: float = 0.0
     application_status: str | None
 
 
@@ -159,6 +168,8 @@ class CandidateOut(BaseModel):
     matched: list[dict]
     below_level: list[dict]
     missing: list[dict]
+    related: list[dict] = []
+    related_credit: float = 0.0
     application_id: int | None
     application_status: str | None
     email: str | None

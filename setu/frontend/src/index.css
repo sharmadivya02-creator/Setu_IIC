@@ -1,0 +1,56 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    background-color: #f7f2e9;
+    color: #2e2136;
+  }
+  ::selection {
+    background: #ebd2da;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-card bg-white/70 shadow-soft border border-petal/60 p-5;
+  }
+  .card-mauve {
+    @apply rounded-card bg-petal/60 border border-violet/20 p-5;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold transition-transform active:scale-95 disabled:opacity-50 disabled:active:scale-100;
+  }
+  .btn-primary {
+    @apply btn bg-plum text-cream hover:bg-violet;
+  }
+  .btn-secondary {
+    @apply btn bg-white text-plum border border-violet/40 hover:border-violet;
+  }
+  .btn-danger {
+    @apply btn bg-signal text-white hover:opacity-90;
+  }
+  .input {
+    @apply w-full rounded-2xl border border-violet/30 bg-white px-4 py-2.5 text-sm outline-none focus:border-periwinkle focus:ring-2 focus:ring-periwinkle/30;
+  }
+  .label {
+    @apply font-mono text-[11px] uppercase tracking-[0.18em] text-violet;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

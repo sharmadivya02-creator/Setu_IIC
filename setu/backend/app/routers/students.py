@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from ..ai import extract_skills_with_groq, extract_text_from_pdf
 from ..auth import require_role
 from ..db import get_db
 from ..engine import learn_next, score_student
@@ -11,8 +12,10 @@ from ..schemas import (
     ApplicationOut,
     LearnNextOut,
     MatchOut,
+    ParsedSkillOut,
     PostingOut,
     RequirementOut,
+    ResumeParseResponse,
     StudentProfileOut,
     StudentProfileUpdate,
     StudentSkillIn,
@@ -116,7 +119,71 @@ def replace_skills(body: list[StudentSkillIn], user: User = Depends(require_role
     return profile_out(load_student(db, user))
 
 
+@router.post("/me/parse-resume", response_model=ResumeParseResponse)
+async def parse_resume(
+    file: UploadFile = File(...),
+    user: User = Depends(require_role("student")),
+    db: Session = Depends(get_db),
+):
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(400, "Only PDF files are supported. Please upload a valid .pdf file.")
+
+    content = await file.read()
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(400, "File size exceeds 10 MB limit.")
+
+    resume_text = extract_text_from_pdf(content)
+
+    skills = list(db.scalars(select(Skill).order_by(Skill.category, Skill.name)))
+    taxonomy_data = [{"id": s.id, "name": s.name, "category": s.category} for s in skills]
+    skills_by_id = {s.id: s for s in skills}
+    skills_by_name = {s.name.lower(): s for s in skills}
+
+    ai_result = await extract_skills_with_groq(resume_text, taxonomy_data)
+
+    parsed_skills: list[ParsedSkillOut] = []
+    seen_ids = set()
+
+    for item in ai_result.get("skills", []):
+        try:
+            skill_id = int(item.get("skill_id", 0))
+            raw_level = int(item.get("suggested_level", 1))
+            clamped_level = max(1, min(5, raw_level))
+            evidence = str(item.get("evidence", "")).strip()
+
+            skill = None
+            if skill_id in skills_by_id:
+                skill = skills_by_id[skill_id]
+            else:
+                candidate_name = str(item.get("name") or item.get("skill_name") or "").strip().lower()
+                if candidate_name in skills_by_name:
+                    skill = skills_by_name[candidate_name]
+
+            if skill and skill.id not in seen_ids:
+                seen_ids.add(skill.id)
+                parsed_skills.append(
+                    ParsedSkillOut(
+                        skill_id=skill.id,
+                        name=skill.name,
+                        category=skill.category,
+                        suggested_level=clamped_level,
+                        evidence=evidence or f"Identified in resume projects ({skill.name})",
+                    )
+                )
+        except Exception:
+            continue
+
+    summary = str(ai_result.get("summary", "")).strip() or "Resume profile analyzed successfully."
+
+    return ResumeParseResponse(
+        summary=summary,
+        skills=parsed_skills,
+        total_detected=len(parsed_skills),
+    )
+
+
 @router.get("/me/matches", response_model=list[MatchOut])
+
 def my_matches(user: User = Depends(require_role("student")), db: Session = Depends(get_db)):
     student = load_student(db, user)
     held = held_skills_for_student(db, student.id)

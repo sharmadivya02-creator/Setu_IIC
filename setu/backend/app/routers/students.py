@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy import select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from ..ai import extract_skills_with_groq, extract_text_from_pdf
 from ..auth import require_role
@@ -26,11 +26,15 @@ router = APIRouter(prefix="/students", tags=["student"], dependencies=[Depends(r
 
 
 def load_student(db: Session, user: User) -> Student:
-    student = db.scalar(
+    student = db.execute(
         select(Student)
         .where(Student.user_id == user.id)
-        .options(selectinload(Student.skills).selectinload(StudentSkill.skill), selectinload(Student.batch))
-    )
+        .options(
+            joinedload(Student.user),
+            joinedload(Student.batch),
+            joinedload(Student.skills).joinedload(StudentSkill.skill),
+        )
+    ).unique().scalar_one_or_none()
     if student is None:
         raise HTTPException(404, "No student profile for this account")
     return student

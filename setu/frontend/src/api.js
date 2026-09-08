@@ -44,6 +44,25 @@ const get = (path) => request("GET", path);
 const post = (path, body) => request("POST", path, body);
 const put = (path, body) => request("PUT", path, body);
 
+async function upload(path, formData) {
+  const headers = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const response = await fetch(BASE + path, {
+    method: "POST",
+    headers,
+    body: formData,
+  });
+  if (response.status === 204) return null;
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const detail = typeof payload.detail === "string" ? payload.detail : JSON.stringify(payload.detail || payload);
+    const error = new Error(detail);
+    error.status = response.status;
+    throw error;
+  }
+  return payload;
+}
+
 export const api = {
   login: (email, password) => post("/auth/login", { email, password }),
   register: (form) => post("/auth/register", form),
@@ -55,10 +74,16 @@ export const api = {
   studentProfile: () => get("/students/me"),
   updateStudentProfile: (form) => put("/students/me", form),
   saveStudentSkills: (skills) => put("/students/me/skills", skills),
+  parseResume: (file) => {
+    const form = new FormData();
+    form.append("file", file);
+    return upload("/students/me/parse-resume", form);
+  },
   studentMatches: () => get("/students/me/matches"),
   studentGaps: () => get("/students/me/gaps"),
   apply: (postingId) => post(`/students/me/apply/${postingId}`),
   studentApplications: () => get("/students/me/applications"),
+
 
   analytics: (batchId) => get(`/faculty/analytics${batchId ? `?batch_id=${batchId}` : ""}`),
   facultyStudents: (batchId) => get(`/faculty/students${batchId ? `?batch_id=${batchId}` : ""}`),

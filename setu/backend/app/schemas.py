@@ -237,3 +237,18 @@ class MarketRefreshOut(BaseModel):
     imported: int
     skipped: int
     total_market_postings: int
+
+
+class ParsedSkillOut(BaseModel):
+    skill_id: int
+    name: str
+    category: str
+    suggested_level: int = Field(ge=1, le=5)
+    evidence: str
+
+
+class ResumeParseResponse(BaseModel):
+    summary: str
+    skills: list[ParsedSkillOut]
+    total_detected: int
+

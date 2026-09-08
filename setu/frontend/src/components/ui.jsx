@@ -221,7 +221,7 @@ export function AiSimilarityMap({ requiredSkills }) {
         <span aria-hidden="true">✦</span> AI similarity map for this role
       </div>
       <p className="mt-1 text-[11px] text-plum/60">
-        Computed by a sentence-embedding model. Shows which skills the AI considers close to what this role needs — independent of your own profile.
+        Computed by a sentence-embedding model. Shows which skills the AI considers close to what this role needs, independent of your own profile.
       </p>
       <div className="mt-2 grid gap-1.5">
         {rows.map((row) => (

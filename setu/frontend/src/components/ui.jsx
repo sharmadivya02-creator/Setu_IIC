@@ -57,6 +57,7 @@ export function SkillChip({ name, level, verified, tone = "petal", onClick }) {
     amber: "bg-amber/15 text-amber",
     red: "bg-signal/10 text-signal",
     plum: "bg-plum text-cream",
+    periwinkle: "bg-periwinkle/15 text-periwinkle",
   };
   const Tag = onClick ? "button" : "span";
   return (
@@ -119,35 +120,52 @@ export function useToast() {
   return [show, element];
 }
 
+const DOT_TONE = { matched: "bg-teal", below: "bg-amber", related: "bg-periwinkle", missing: "bg-signal" };
+
 export function ScoreBreakdown({ match }) {
+  const related = match.related || [];
   const rows = [
     ...match.matched.map((row) => ({ ...row, state: "matched" })),
     ...match.below_level.map((row) => ({ ...row, state: "below" })),
+    ...related.map((row) => ({ ...row, state: "related" })),
     ...match.missing.map((row) => ({ ...row, state: "missing" })),
   ];
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="label">why this score</div>
-        {match.verified_bonus > 0 && <div className="font-mono text-xs text-teal">+{match.verified_bonus}% verified bonus</div>}
+        <div className="flex gap-3">
+          {match.verified_bonus > 0 && <div className="font-mono text-xs text-teal">+{match.verified_bonus}% verified bonus</div>}
+          {match.related_credit > 0 && <div className="font-mono text-xs text-periwinkle">+{match.related_credit}% transferable skills</div>}
+        </div>
       </div>
       <div className="grid gap-1.5">
         {rows.map((row) => (
-          <div key={row.skill_id} className="flex items-center justify-between rounded-xl bg-white/70 px-3 py-2 text-sm">
-            <div className="flex items-center gap-2">
-              <span className={`h-2 w-2 rounded-full ${row.state === "matched" ? "bg-teal" : row.state === "below" ? "bg-amber" : "bg-signal"}`} />
-              <span className="font-medium">{row.skill}</span>
-              <span className="font-mono text-[10px] uppercase tracking-wider text-violet">{row.importance === "must_have" ? "must" : "nice"}</span>
-              {row.verified && <span className="font-mono text-[10px] text-teal">verified</span>}
+          <div key={row.skill_id} className="rounded-xl bg-white/70 px-3 py-2 text-sm">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className={`h-2 w-2 shrink-0 rounded-full ${DOT_TONE[row.state]}`} />
+                <span className="font-medium">{row.skill}</span>
+                <span className="font-mono text-[10px] uppercase tracking-wider text-violet">{row.importance === "must_have" ? "must" : "nice"}</span>
+                {row.verified && <span className="font-mono text-[10px] text-teal">verified</span>}
+              </div>
+              <div className="shrink-0 font-mono text-xs text-plum/70">
+                {row.state === "missing" && `missing, needs L${row.needed}`}
+                {row.state === "related" && `${row.credit} credit of 1`}
+                {(row.state === "matched" || row.state === "below") && `L${row.level} of L${row.needed}${row.state === "below" ? " (below)" : ""}`}
+              </div>
             </div>
-            <div className="font-mono text-xs text-plum/70">
-              {row.state === "missing" ? `missing, needs L${row.needed}` : `L${row.level} of L${row.needed}${row.state === "below" ? " (below)" : ""}`}
-            </div>
+            {row.state === "related" && (
+              <div className="mt-1 pl-4 font-mono text-[10px] text-periwinkle">
+                you do not have this, but you know {row.via_skill} at L{row.via_level} — similarity {row.similarity}
+              </div>
+            )}
           </div>
         ))}
       </div>
       <p className="text-xs text-plum/60">
         Score = weighted credit / total weight. Must-have skills weigh 3, nice-to-have weigh 1. Credit per skill = min(1, your level / needed level), times 1.1 if faculty verified it.
+        {related.length > 0 && " A skill you do not have can earn up to 0.4 credit if you know a semantically similar one — measured by embedding similarity, and only the single closest skill counts."}
       </p>
     </div>
   );

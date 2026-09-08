@@ -81,6 +81,9 @@ export default function RecruiterCandidates() {
                 {candidate.below_level.slice(0, 2).map((row) => (
                   <SkillChip key={row.skill_id} name={`${row.skill} L${row.level}/${row.needed}`} tone="amber" />
                 ))}
+                {(candidate.related || []).slice(0, 2).map((row) => (
+                  <SkillChip key={row.skill_id} name={`${row.skill} via ${row.via_skill}`} tone="periwinkle" />
+                ))}
                 {candidate.missing.slice(0, 3).map((row) => (
                   <SkillChip key={row.skill_id} name={`missing ${row.skill}`} tone="red" />
                 ))}

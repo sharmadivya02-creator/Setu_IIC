@@ -76,7 +76,14 @@ export default function StudentOpenings() {
                   {match.posting.required_skills.slice(0, 5).map((req) => {
                     const missing = match.missing.some((item) => item.skill_id === req.skill_id);
                     const below = match.below_level.some((item) => item.skill_id === req.skill_id);
-                    return <SkillChip key={req.skill_id} name={`${req.skill} L${req.min_level}`} tone={missing ? "red" : below ? "amber" : "teal"} />;
+                    const related = (match.related || []).some((item) => item.skill_id === req.skill_id);
+                    return (
+                      <SkillChip
+                        key={req.skill_id}
+                        name={`${req.skill} L${req.min_level}`}
+                        tone={missing ? "red" : below ? "amber" : related ? "periwinkle" : "teal"}
+                      />
+                    );
                   })}
                   {match.posting.required_skills.length > 5 && <span className="chip bg-white">+{match.posting.required_skills.length - 5}</span>}
                 </div>

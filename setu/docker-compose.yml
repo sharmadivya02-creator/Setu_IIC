@@ -14,10 +14,8 @@ services:
 
   backend:
     build: ./backend
-    environment:
-      DATABASE_URL: postgresql://setu:setu@db:5432/setu
-      JWT_SECRET: change-me-in-production
-      CORS_ORIGINS: http://localhost:5173,http://localhost:8080
+    env_file:
+      - ./backend/.env
     ports:
       - "8000:8000"
     depends_on:

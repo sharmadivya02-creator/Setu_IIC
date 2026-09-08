@@ -46,12 +46,30 @@ App: http://localhost:5173
 
 ## Run with Docker
 
+For a persistent database, put your Neon connection string in `backend/.env`:
+
+```
+DATABASE_URL=postgresql://<user>:<password>@<neon-host>/<database>?sslmode=require
+JWT_SECRET=<long-random-secret>
+CORS_ORIGINS=http://localhost:5173,http://localhost:8080
+```
+
+Docker loads these values into the backend. The local Postgres container remains available as a fallback only when `DATABASE_URL` points to `db:5432`.
+
 ```
 docker compose up --build
-docker compose exec backend python seed.py
 ```
 
 App on http://localhost:8080, API on http://localhost:8000/docs.
+
+Run migrations and seed demo data against the configured database when needed:
+
+```
+docker compose exec backend alembic upgrade head
+docker compose exec backend python seed.py
+```
+
+`seed.py` replaces existing demo/application data, so run it only for a fresh database or when you intentionally want to reset seeded data.
 
 ## Deploy to a public URL
 

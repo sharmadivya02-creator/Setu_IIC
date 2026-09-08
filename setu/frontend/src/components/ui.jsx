@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { api } from "../api";
 
 export function Ring({ value, size = 96, stroke = 9, color = "#2F9599", label, sublabel }) {
   const radius = (size - stroke) / 2;
@@ -65,6 +66,7 @@ export function SkillChip({ name, level, verified, tone = "petal", onClick }) {
       {name}
       {level ? <LevelDots level={level} /> : null}
       {verified ? <span title="verified by faculty" className="ml-0.5 font-mono text-[10px]">v</span> : null}
+      {tone === "periwinkle" ? <span title="AI-matched: found using a sentence-embedding model, not an exact name match" className="ml-1 font-mono text-[9px]" aria-hidden="true">✦AI</span> : null}
     </Tag>
   );
 }
@@ -136,7 +138,12 @@ export function ScoreBreakdown({ match }) {
         <div className="label">why this score</div>
         <div className="flex gap-3">
           {match.verified_bonus > 0 && <div className="font-mono text-xs text-teal">+{match.verified_bonus}% verified bonus</div>}
-          {match.related_credit > 0 && <div className="font-mono text-xs text-periwinkle">+{match.related_credit}% transferable skills</div>}
+          {match.related_credit > 0 && (
+            <div className="flex items-center gap-1.5 font-mono text-xs text-periwinkle">
+              +{match.related_credit}% transferable skills
+              <AiBadge />
+            </div>
+          )}
         </div>
       </div>
       <div className="grid gap-1.5">
@@ -167,6 +174,69 @@ export function ScoreBreakdown({ match }) {
         Score = weighted credit / total weight. Must-have skills weigh 3, nice-to-have weigh 1. Credit per skill = min(1, your level / needed level), times 1.1 if faculty verified it.
         {related.length > 0 && " A skill you do not have can earn up to 0.4 credit if you know a semantically similar one — measured by embedding similarity, and only the single closest skill counts."}
       </p>
+    </div>
+  );
+}
+
+export function AiBadge({ label = "AI-matched" }) {
+  return (
+    <span
+      title="Computed by a sentence-embedding AI model (all-MiniLM-L6-v2), not an exact skill-name match."
+      className="inline-flex items-center gap-1 rounded-full bg-periwinkle/15 px-2 py-0.5 font-mono text-[9px] uppercase tracking-wider text-periwinkle"
+    >
+      <span aria-hidden="true">✦</span>
+      {label}
+    </span>
+  );
+}
+
+export function AiSimilarityMap({ requiredSkills }) {
+  const [rows, setRows] = useState(null);
+  const skillIds = requiredSkills.map((req) => req.skill_id).join(",");
+
+  useEffect(() => {
+    let cancelled = false;
+    setRows(null);
+    Promise.all(
+      requiredSkills.map((req) =>
+        api
+          .relatedSkills(req.skill_id)
+          .then((related) => ({ skill: req.skill, related }))
+          .catch(() => ({ skill: req.skill, related: [] }))
+      )
+    ).then((result) => {
+      if (!cancelled) setRows(result.filter((item) => item.related.length > 0));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [skillIds]);
+
+  if (rows === null) return <div className="text-xs text-plum/50">Loading AI similarity map…</div>;
+  if (rows.length === 0) return null;
+
+  return (
+    <div className="rounded-2xl border border-periwinkle/30 bg-periwinkle/10 p-3">
+      <div className="flex items-center gap-1.5 label text-periwinkle">
+        <span aria-hidden="true">✦</span> AI similarity map for this role
+      </div>
+      <p className="mt-1 text-[11px] text-plum/60">
+        Computed by a sentence-embedding model. Shows which skills the AI considers close to what this role needs — independent of your own profile.
+      </p>
+      <div className="mt-2 grid gap-1.5">
+        {rows.map((row) => (
+          <div key={row.skill} className="text-xs">
+            <span className="font-semibold">{row.skill}</span>
+            <span className="text-plum/60"> is close to </span>
+            {row.related.slice(0, 3).map((r, i) => (
+              <span key={r.skill_id} className="font-mono text-periwinkle">
+                {i > 0 && ", "}
+                {r.skill} ({r.similarity})
+              </span>
+            ))}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

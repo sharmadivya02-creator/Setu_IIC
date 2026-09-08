@@ -154,7 +154,7 @@ def my_gaps(user: User = Depends(require_role("student")), db: Session = Depends
     student = load_student(db, user)
     held = held_skills_for_student(db, student.id)
     postings = active_postings_with_requirements(db)
-    return learn_next(held, [requirements_of(posting) for posting in postings], skill_adjacency(db))
+    return learn_next(held, [requirements_of(posting) for posting in postings], adjacency=skill_adjacency(db))
 
 
 @router.post("/me/apply/{posting_id}", response_model=ApplicationOut, status_code=201)

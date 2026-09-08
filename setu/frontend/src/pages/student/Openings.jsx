@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../../api";
-import { Empty, ErrorNote, Loading, Modal, Ring, ScoreBreakdown, SkillChip, scoreColor, useToast } from "../../components/ui";
+import { AiSimilarityMap, Empty, ErrorNote, Loading, Modal, Ring, ScoreBreakdown, SkillChip, scoreColor, useToast } from "../../components/ui";
 
 const STATUS_TONE = { applied: "petal", shortlisted: "teal", interview: "amber", offered: "teal", rejected: "red" };
 
@@ -54,6 +54,10 @@ export default function StudentOpenings() {
             </button>
           ))}
         </div>
+      </div>
+
+      <div className="rounded-2xl border border-periwinkle/30 bg-periwinkle/10 px-4 py-2 text-xs text-periwinkle">
+        <span className="font-mono font-semibold">✦ AI</span> tag on a skill chip means it was matched by an AI embedding model (not an exact skill-name match) — you don't hold that exact skill, but you hold something close enough to earn partial credit.
       </div>
 
       {visible.length === 0 && <Empty title="Nothing here yet" body="No openings match this filter." />}
@@ -118,6 +122,7 @@ export default function StudentOpenings() {
                 <p className="mt-1 text-sm text-plum/80">{open.posting.description}</p>
               </div>
               <ScoreBreakdown match={open} />
+              <AiSimilarityMap requiredSkills={open.posting.required_skills} />
             </div>
           </div>
         )}

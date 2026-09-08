@@ -9,6 +9,7 @@ from ..loaders import (
     active_postings_with_requirements,
     held_skills_for_students,
     requirements_of,
+    skill_adjacency,
     skill_name_map,
     students_in_batch,
 )
@@ -27,10 +28,10 @@ from .students import profile_out
 router = APIRouter(prefix="/faculty", tags=["faculty"], dependencies=[Depends(require_role("faculty"))])
 
 
-def readiness_of(held, postings_requirements, top: int = 5) -> float:
+def readiness_of(held, postings_requirements, adjacency=None, top: int = 5) -> float:
     if not postings_requirements:
         return 0.0
-    best = sorted((score_student(held, reqs).score for reqs in postings_requirements), reverse=True)[:top]
+    best = sorted((score_student(held, reqs, adjacency).score for reqs in postings_requirements), reverse=True)[:top]
     return round(sum(best) / len(best), 1)
 
 
@@ -48,8 +49,9 @@ def analytics(batch_id: int | None = None, db: Session = Depends(get_db)):
     cohort = held_skills_for_students(db, student_ids)
     postings = active_postings_with_requirements(db)
     postings_requirements = [requirements_of(posting) for posting in postings]
+    adjacency = skill_adjacency(db)
 
-    readiness = [readiness_of(cohort[student_id], postings_requirements) for student_id in student_ids]
+    readiness = [readiness_of(cohort[student_id], postings_requirements, adjacency) for student_id in student_ids]
     buckets = {"ready": 0, "close": 0, "developing": 0, "at_risk": 0}
     for value in readiness:
         if value >= 70:
@@ -81,6 +83,7 @@ def list_students(batch_id: int | None = None, db: Session = Depends(get_db)):
     student_ids = [student.id for student in students]
     cohort = held_skills_for_students(db, student_ids)
     postings_requirements = [requirements_of(posting) for posting in active_postings_with_requirements(db)]
+    adjacency = skill_adjacency(db)
     rows = []
     for student in students:
         held = cohort[student.id]
@@ -95,7 +98,7 @@ def list_students(batch_id: int | None = None, db: Session = Depends(get_db)):
                 cgpa=student.cgpa,
                 skill_count=len(held),
                 verified_count=sum(1 for item in held.values() if item.verified),
-                readiness=readiness_of(held, postings_requirements),
+                readiness=readiness_of(held, postings_requirements, adjacency),
             )
         )
     rows.sort(key=lambda row: row.readiness, reverse=True)

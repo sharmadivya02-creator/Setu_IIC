@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session, selectinload
 from ..auth import require_role
 from ..db import get_db
 from ..engine import score_student
-from ..loaders import held_skills_for_students, requirements_of, students_in_batch
+from ..loaders import held_skills_for_students, requirements_of, skill_adjacency, skill_name_map, students_in_batch
 from ..models import Application, Company, Posting, PostingSkill, Skill, Student, User
 from ..schemas import ApplicationOut, CandidateOut, PostingIn, PostingOut, StatusUpdateIn
 from .students import posting_out
@@ -99,6 +99,8 @@ def ranked_candidates(posting_id: int, limit: int = 50, user: User = Depends(req
     requirements = requirements_of(posting)
     students = students_in_batch(db, None)
     cohort = held_skills_for_students(db, [student.id for student in students])
+    adjacency = skill_adjacency(db)
+    skill_names = skill_name_map(db)
     applications = {
         app.student_id: app
         for app in db.scalars(select(Application).where(Application.posting_id == posting_id))
@@ -107,7 +109,7 @@ def ranked_candidates(posting_id: int, limit: int = 50, user: User = Depends(req
     candidates = []
     for student in students:
         held = cohort[student.id]
-        result = score_student(held, requirements)
+        result = score_student(held, requirements, adjacency, skill_names)
         application = applications.get(student.id)
         contact_visible = application is not None and application.status != "applied"
         candidates.append(
@@ -124,6 +126,8 @@ def ranked_candidates(posting_id: int, limit: int = 50, user: User = Depends(req
                 matched=result.matched,
                 below_level=result.below_level,
                 missing=result.missing,
+                related=result.related,
+                related_credit=result.related_credit,
                 application_id=application.id if application else None,
                 application_status=application.status if application else None,
                 email=student.user.email if contact_visible else None,
@@ -170,11 +174,13 @@ def applications_for_posting(posting_id: int, user: User = Depends(require_role(
         )
     )
     cohort = held_skills_for_students(db, [app.student_id for app in applications])
+    adjacency = skill_adjacency(db)
+    skill_names = skill_name_map(db)
     rows = []
     for app in applications:
         student = app.student
         held = cohort[student.id]
-        result = score_student(held, requirements)
+        result = score_student(held, requirements, adjacency, skill_names)
         visible = app.status != "applied"
         rows.append(
             CandidateOut(
@@ -190,6 +196,8 @@ def applications_for_posting(posting_id: int, user: User = Depends(require_role(
                 matched=result.matched,
                 below_level=result.below_level,
                 missing=result.missing,
+                related=result.related,
+                related_credit=result.related_credit,
                 application_id=app.id,
                 application_status=app.status,
                 email=student.user.email if visible else None,

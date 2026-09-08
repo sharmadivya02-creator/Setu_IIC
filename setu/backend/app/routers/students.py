@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session, selectinload
 from ..auth import require_role
 from ..db import get_db
 from ..engine import learn_next, score_student
-from ..loaders import active_postings_with_requirements, held_skills_for_student, requirements_of
+from ..loaders import active_postings_with_requirements, held_skills_for_student, requirements_of, skill_adjacency, skill_name_map
 from ..models import Application, Posting, Skill, Student, StudentSkill, User
 from ..schemas import (
     ApplicationOut,
@@ -121,6 +121,8 @@ def my_matches(user: User = Depends(require_role("student")), db: Session = Depe
     student = load_student(db, user)
     held = held_skills_for_student(db, student.id)
     postings = active_postings_with_requirements(db)
+    adjacency = skill_adjacency(db)
+    skill_names = skill_name_map(db)
     statuses = {
         posting_id: status
         for posting_id, status in db.execute(
@@ -129,7 +131,7 @@ def my_matches(user: User = Depends(require_role("student")), db: Session = Depe
     }
     matches = []
     for posting in postings:
-        result = score_student(held, requirements_of(posting))
+        result = score_student(held, requirements_of(posting), adjacency, skill_names)
         matches.append(
             MatchOut(
                 posting=posting_out(posting),
@@ -138,6 +140,8 @@ def my_matches(user: User = Depends(require_role("student")), db: Session = Depe
                 matched=result.matched,
                 below_level=result.below_level,
                 missing=result.missing,
+                related=result.related,
+                related_credit=result.related_credit,
                 application_status=statuses.get(posting.id),
             )
         )
@@ -150,7 +154,7 @@ def my_gaps(user: User = Depends(require_role("student")), db: Session = Depends
     student = load_student(db, user)
     held = held_skills_for_student(db, student.id)
     postings = active_postings_with_requirements(db)
-    return learn_next(held, [requirements_of(posting) for posting in postings])
+    return learn_next(held, [requirements_of(posting) for posting in postings], adjacency=skill_adjacency(db))
 
 
 @router.post("/me/apply/{posting_id}", response_model=ApplicationOut, status_code=201)

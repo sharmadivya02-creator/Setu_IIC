@@ -49,6 +49,7 @@ export const api = {
   register: (form) => post("/auth/register", form),
   me: () => get("/auth/me"),
   skills: () => get("/skills"),
+  relatedSkills: (skillId) => get(`/skills/${skillId}/related`),
   batches: () => get("/batches"),
 
   studentProfile: () => get("/students/me"),

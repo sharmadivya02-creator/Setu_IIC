@@ -93,6 +93,21 @@ class StudentSkill(Base):
 Index("ix_student_skills_skill_id", StudentSkill.skill_id)
 
 
+class SkillSimilarity(Base):
+    """Precomputed semantic closeness between two skills.
+
+    Rows are written by scripts/build_skill_graph.py from embedding vectors.
+    Both directions are stored (A->B and B->A) so a lookup filters one column.
+    An empty table simply disables transferable-skill credit.
+    """
+
+    __tablename__ = "skill_similarity"
+
+    skill_id: Mapped[int] = mapped_column(ForeignKey("skills.id", ondelete="CASCADE"), primary_key=True)
+    related_skill_id: Mapped[int] = mapped_column(ForeignKey("skills.id", ondelete="CASCADE"), primary_key=True)
+    similarity: Mapped[float] = mapped_column(Float)
+
+
 class Company(Base):
     __tablename__ = "companies"
 

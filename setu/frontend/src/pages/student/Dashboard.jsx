@@ -54,8 +54,8 @@ export default function StudentDashboard() {
         </div>
       )}
 
-      <div className="grid gap-6 md:grid-cols-[1.2fr_1fr]">
-        <section className="card">
+      <div className="grid min-w-0 gap-6 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+        <section className="card min-w-0">
           <div className="flex items-center justify-between">
             <h2 className="font-display text-2xl">Top matches</h2>
             <Link to="/student/openings" className="font-mono text-xs text-periwinkle underline">
@@ -64,8 +64,8 @@ export default function StudentDashboard() {
           </div>
           <div className="mt-4 grid gap-3">
             {topFive.map((match) => (
-              <Link key={match.posting.id} to={`/student/openings?open=${match.posting.id}`} className="flex items-center gap-4 rounded-2xl bg-petal/40 p-3 hover:bg-petal/70">
-                <div className="w-14 text-center font-mono text-lg" style={{ color: scoreColor(match.score) }}>
+              <Link key={match.posting.id} to={`/student/openings?open=${match.posting.id}`} className="flex min-w-0 items-center gap-4 rounded-2xl bg-petal/40 p-3 hover:bg-petal/70">
+                <div className="w-14 shrink-0 text-center font-mono text-lg" style={{ color: scoreColor(match.score) }}>
                   {Math.round(match.score)}%
                 </div>
                 <div className="min-w-0 flex-1">
@@ -77,7 +77,7 @@ export default function StudentDashboard() {
                     <Bar value={match.score} color={scoreColor(match.score)} />
                   </div>
                 </div>
-                <div className="hidden text-right font-mono text-[11px] text-plum/60 sm:block">
+                <div className="hidden shrink-0 whitespace-nowrap text-right font-mono text-[11px] text-plum/60 sm:block">
                   {match.missing.length ? `${match.missing.length} missing` : "all skills present"}
                 </div>
               </Link>
@@ -85,7 +85,7 @@ export default function StudentDashboard() {
           </div>
         </section>
 
-        <section className="card">
+        <section className="card min-w-0">
           <h2 className="font-display text-2xl">Learn next</h2>
           <p className="mt-1 text-xs text-plum/60">Ranked by how much each skill would lift your average match score across every live opening.</p>
           <div className="mt-4 grid gap-3">
@@ -95,9 +95,8 @@ export default function StudentDashboard() {
                   <SkillChip name={gap.skill} tone="plum" />
                   <span className="font-mono text-xs text-teal">+{gap.avg_score_lift} avg</span>
                 </div>
-                <div className="mt-2 flex items-center justify-between font-mono text-[11px] text-plum/60">
-                  <span>target level {gap.target_level}</span>
-                  <span>required by {gap.demand_pct}% of openings</span>
+                <div className="mt-2 font-mono text-[11px] text-plum/60">
+                  target level {gap.target_level} · required by {gap.demand_pct}% of openings
                 </div>
               </div>
             ))}

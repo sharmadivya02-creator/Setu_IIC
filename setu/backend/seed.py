@@ -10,6 +10,8 @@ from app.models import (
     Batch,
     College,
     Company,
+    CompanyDocument,
+    DocumentChunk,
     Posting,
     PostingSkill,
     Skill,
@@ -90,6 +92,42 @@ POSTINGS = [
 
 BATCHES = ["CSE 2026", "IT 2026", "ECE 2026", "CSE 2027"]
 
+# Seeded so the policy-check (RAG) feature has real text to retrieve from on
+# the very first run, the same way skill_vectors.json ships pre-generated.
+# A recruiter can delete this and upload their own PDF at any time.
+DEMO_POLICY_TEXT = """
+Hiring Policy and Terms, effective 2026 — internal document for recruiter use only.
+
+Eligibility criteria: candidates must hold a minimum CGPA of 6.5 out of 10 at the
+time of application. Candidates with more than two active academic backlogs are
+not eligible to apply. This policy applies uniformly across CSE, IT and ECE
+branches. Final-year students in their last two semesters are eligible to apply
+for full-time roles; earlier-year students may only apply for internships.
+
+Notice period and joining timeline: selected candidates for full-time roles are
+expected to join within 30 days of receiving a formal offer letter. Interns are
+expected to begin within 14 days of acceptance. Requests for a joining date more
+than 60 days out require written approval from the hiring manager and are
+evaluated case by case; there is no blanket extension beyond 90 days under any
+circumstance.
+
+Work authorization and location: all internship and full-time roles listed
+through this platform are on-site or hybrid positions based in India, and
+require the candidate to already hold the legal right to work in India. This
+platform does not currently sponsor work visas for any listed opening. Remote
+roles marked "Remote" in the posting are open to candidates located anywhere in
+India, not internationally.
+
+Bond, service agreement and compensation terms: full-time offers include a
+12-month minimum service commitment from the date of joining; candidates who
+resign before completing 12 months are liable for a pro-rated training-cost
+recovery as specified in their individual offer letter, not exceeding two
+months of gross salary. Internship stipends are disbursed monthly and are not
+subject to any service commitment or bond. Compensation bands for each role are
+communicated directly during the offer stage and are not published on this
+platform.
+""".strip()
+
 
 def wipe(db):
     for table in (Application, PostingSkill, Posting, StudentSkill, Student, Company, Batch, College, Skill, User):
@@ -168,6 +206,19 @@ def run():
     db.add(recruiter_user)
     db.flush()
     companies[3].recruiter_user_id = recruiter_user.id
+
+    demo_policy_document = CompanyDocument(company_id=companies[3].id, filename="hiring_policy_2026.pdf")
+    db.add(demo_policy_document)
+    db.flush()
+    # Split on paragraph breaks rather than chunk_text()'s word-count window:
+    # this canned demo text already has one clean paragraph per policy topic,
+    # so a real chunk per topic makes retrieve() visibly pick different
+    # excerpts for different categories -- a better first demo than one
+    # giant chunk. A recruiter's own uploaded PDF still goes through the
+    # normal chunk_text() word-window path in the upload endpoint.
+    demo_chunks = [para.strip() for para in DEMO_POLICY_TEXT.split("\n\n") if para.strip()]
+    for index, chunk in enumerate(demo_chunks):
+        db.add(DocumentChunk(document_id=demo_policy_document.id, company_id=companies[3].id, chunk_index=index, text=chunk))
 
     postings = []
     for index, (title, kind, location, requirements) in enumerate(POSTINGS):

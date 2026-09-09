@@ -35,7 +35,7 @@ def extract_text_from_pdf(file_bytes: bytes) -> str:
             raise HTTPException(400, "PDF file is password-protected. Please upload an unlocked PDF.")
 
         text_pages: list[str] = []
-        for page in reader.pages:
+        for index, page in enumerate(reader.pages):
             page_text = page.extract_text() or ""
             if page_text.strip():
                 text_pages.append(page_text.strip())
@@ -89,47 +89,22 @@ def extract_json_from_text(raw_text: str) -> dict[str, Any]:
     raise ValueError(f"Could not parse valid JSON from AI response: {text[:200]}")
 
 
-async def extract_skills_with_groq(resume_text: str, taxonomy_skills: list[dict[str, Any]]) -> dict[str, Any]:
-    """Call Groq API with JSON schema enforcement and fallback recovery to parse skills mapped to Setu taxonomy."""
+async def call_groq_json(system_prompt: str, user_prompt: str) -> dict[str, Any]:
+    """Send one chat completion to Groq and return parsed JSON.
+
+    Shared by every feature that needs a live LLM call (resume parsing,
+    policy-check). Tries each supported model, and for each model tries
+    strict JSON mode first, falling back to a free-form request that gets
+    parsed by `extract_json_from_text` if the strict mode is rejected.
+    Raises HTTPException(500) if no Groq key is configured, or (502) if
+    every model/mode combination fails -- callers do not need their own
+    retry logic, just a system prompt and a user prompt.
+    """
     if not GROQ_API_KEY:
         raise HTTPException(
             500,
             "GROQ_API_KEY is not configured on the server. Please check backend environment settings.",
         )
-
-    # Provide taxonomy summary to the LLM (ID, Name, Category)
-    skills_context = json.dumps(
-        [{"id": s["id"], "name": s["name"], "category": s["category"]} for s in taxonomy_skills],
-        separators=(",", ":"),
-    )
-
-    system_prompt = (
-        "You are an expert technical recruiter and resume analyzer for Setu.\n"
-        "Your task: Read the candidate's resume and identify which of the allowed taxonomy skills they possess.\n\n"
-        "CRITICAL RULES:\n"
-        "1. ONLY select skills that exist in the PROVIDED TAXONOMY list. Do NOT invent new skills.\n"
-        "2. Rate each skill on a 1-5 scale based on real project depth or work experience:\n"
-        "   - 1: Aware (basic mention, coursework)\n"
-        "   - 2: Beginner (academic or hobby project)\n"
-        "   - 3: Working (production app, full stack, internship, core strength)\n"
-        "   - 4: Proficient (advanced architecture, distributed systems, deep expertise)\n"
-        "   - 5: Expert (lead level, extensive production experience)\n"
-        "3. Provide a brief 4-8 word evidence snippet from the resume for each detected skill.\n"
-        "4. Output MUST be valid JSON with exactly two top-level keys: 'summary' (1-sentence candidate overview) and 'skills' (array of objects with 'skill_id', 'suggested_level', 'evidence').\n"
-        "5. Output only JSON without markdown fences."
-    )
-
-    user_prompt = (
-        f"TAXONOMY SKILLS:\n{skills_context}\n\n"
-        f"CANDIDATE RESUME TEXT:\n{resume_text}\n\n"
-        "Extract the skills and return JSON in format:\n"
-        "{\n"
-        '  "summary": "1-sentence profile synopsis",\n'
-        '  "skills": [\n'
-        '    {"skill_id": 12, "suggested_level": 3, "evidence": "Built REST API with FastAPI"}\n'
-        "  ]\n"
-        "}"
-    )
 
     headers = {
         "Authorization": f"Bearer {GROQ_API_KEY}",
@@ -165,8 +140,7 @@ async def extract_skills_with_groq(resume_text: str, taxonomy_skills: list[dict[
                 if response.status_code == 200:
                     payload = response.json()
                     content = payload["choices"][0]["message"]["content"]
-                    parsed = extract_json_from_text(content)
-                    return parsed
+                    return extract_json_from_text(content)
                 elif response.status_code == 400 and "json_validate_failed" in response.text and use_json_mode:
                     # Groq's JSON validator aborted; retry this same model without strict response_format
                     logger.warning(f"Groq json_validate_failed on {model_name}, retrying without response_format...")
@@ -180,4 +154,43 @@ async def extract_skills_with_groq(resume_text: str, taxonomy_skills: list[dict[
                 logger.warning(last_error)
                 break
 
-    raise HTTPException(502, f"AI extraction service unavailable: {last_error}")
+    raise HTTPException(502, f"AI service unavailable: {last_error}")
+
+
+async def extract_skills_with_groq(resume_text: str, taxonomy_skills: list[dict[str, Any]]) -> dict[str, Any]:
+    """Call Groq API with JSON schema enforcement and fallback recovery to parse skills mapped to Setu taxonomy."""
+    # Provide taxonomy summary to the LLM (ID, Name, Category)
+    skills_context = json.dumps(
+        [{"id": s["id"], "name": s["name"], "category": s["category"]} for s in taxonomy_skills],
+        separators=(",", ":"),
+    )
+
+    system_prompt = (
+        "You are an expert technical recruiter and resume analyzer for Setu.\n"
+        "Your task: Read the candidate's resume and identify which of the allowed taxonomy skills they possess.\n\n"
+        "CRITICAL RULES:\n"
+        "1. ONLY select skills that exist in the PROVIDED TAXONOMY list. Do NOT invent new skills.\n"
+        "2. Rate each skill on a 1-5 scale based on real project depth or work experience:\n"
+        "   - 1: Aware (basic mention, coursework)\n"
+        "   - 2: Beginner (academic or hobby project)\n"
+        "   - 3: Working (production app, full stack, internship, core strength)\n"
+        "   - 4: Proficient (advanced architecture, distributed systems, deep expertise)\n"
+        "   - 5: Expert (lead level, extensive production experience)\n"
+        "3. Provide a brief 4-8 word evidence snippet from the resume for each detected skill.\n"
+        "4. Output MUST be valid JSON with exactly two top-level keys: 'summary' (1-sentence candidate overview) and 'skills' (array of objects with 'skill_id', 'suggested_level', 'evidence').\n"
+        "5. Output only JSON without markdown fences."
+    )
+
+    user_prompt = (
+        f"TAXONOMY SKILLS:\n{skills_context}\n\n"
+        f"CANDIDATE RESUME TEXT:\n{resume_text}\n\n"
+        "Extract the skills and return JSON in format:\n"
+        "{\n"
+        '  "summary": "1-sentence profile synopsis",\n'
+        '  "skills": [\n'
+        '    {"skill_id": 12, "suggested_level": 3, "evidence": "Built REST API with FastAPI"}\n'
+        "  ]\n"
+        "}"
+    )
+
+    return await call_groq_json(system_prompt, user_prompt)

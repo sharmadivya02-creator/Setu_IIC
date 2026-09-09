@@ -5,6 +5,86 @@ import { Empty, ErrorNote, Loading, Modal, SkillChip, useToast } from "../../com
 
 const EMPTY_FORM = { title: "", kind: "internship", location: "", description: "", active: true, required_skills: [] };
 
+function PolicyDocuments({ showToast }) {
+  const [documents, setDocuments] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  function refresh() {
+    api
+      .listPolicyDocuments()
+      .then(setDocuments)
+      .catch((err) => setError(err.message));
+  }
+
+  useEffect(refresh, []);
+
+  async function onFileChosen(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    setBusy(true);
+    try {
+      await api.uploadPolicyDocument(file);
+      refresh();
+      showToast(`${file.name} uploaded and indexed for AI policy checks.`);
+    } catch (err) {
+      showToast(err.message, "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(documentId, filename) {
+    try {
+      await api.deletePolicyDocument(documentId);
+      setDocuments((current) => current.filter((doc) => doc.id !== documentId));
+      showToast(`${filename} removed.`);
+    } catch (err) {
+      showToast(err.message, "error");
+    }
+  }
+
+  return (
+    <div className="card">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <div className="flex items-center gap-1.5 label text-periwinkle">
+            <span aria-hidden="true">✦</span> Company policy documents (AI)
+          </div>
+          <p className="mt-1 max-w-lg text-xs text-plum/60">
+            Upload your company's terms &amp; conditions or hiring policy as a PDF. When you open a candidate, an AI model can cross-check them against the rules found here (eligibility, notice period, work authorization, bond terms).
+          </p>
+        </div>
+        <label className="btn-secondary cursor-pointer px-3 py-1.5 text-xs">
+          {busy ? "uploading…" : "Upload PDF"}
+          <input type="file" accept="application/pdf" className="hidden" disabled={busy} onChange={onFileChosen} />
+        </label>
+      </div>
+
+      {error && <ErrorNote error={error} />}
+      {documents === null && !error && <div className="mt-2 text-xs text-plum/50">Loading documents…</div>}
+      {documents && documents.length === 0 && <div className="mt-2 text-xs text-plum/50">No policy documents uploaded yet.</div>}
+
+      {documents && documents.length > 0 && (
+        <div className="mt-3 grid gap-1.5">
+          {documents.map((doc) => (
+            <div key={doc.id} className="flex items-center justify-between gap-2 rounded-xl bg-white/70 px-3 py-2 text-sm">
+              <div className="min-w-0">
+                <div className="truncate font-medium">{doc.filename}</div>
+                <div className="font-mono text-[10px] text-plum/50">{doc.chunk_count} indexed passages</div>
+              </div>
+              <button type="button" className="font-mono text-xs text-signal" onClick={() => remove(doc.id, doc.filename)}>
+                remove
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PostingForm({ initial, taxonomy, onSubmit, busy }) {
   const [form, setForm] = useState(initial);
   const [query, setQuery] = useState("");
@@ -138,6 +218,8 @@ export default function RecruiterPostings() {
           New posting
         </button>
       </div>
+
+      <PolicyDocuments showToast={showToast} />
 
       {postings.length === 0 && <Empty title="No postings yet" body="Create one with required skills and minimum levels. Ranked candidates appear instantly." />}
 

@@ -51,7 +51,7 @@ export function LevelDots({ level, max = 5 }) {
 
 export const LEVEL_NAMES = ["", "Aware", "Beginner", "Working", "Proficient", "Expert"];
 
-export function SkillChip({ name, level, verified, tone = "petal", onClick }) {
+export function SkillChip({ name, level, verified, tone = "petal", onClick, onRemove }) {
   const tones = {
     petal: "bg-petal text-plum",
     teal: "bg-teal/15 text-teal",
@@ -60,12 +60,18 @@ export function SkillChip({ name, level, verified, tone = "petal", onClick }) {
     plum: "bg-plum text-cream",
     periwinkle: "bg-periwinkle/15 text-periwinkle",
   };
-  const Tag = onClick ? "button" : "span";
+  const isClickable = Boolean(onClick || onRemove);
+  const Tag = isClickable ? "button" : "span";
+  const handleClick = onRemove || onClick;
   return (
-    <Tag type={onClick ? "button" : undefined} onClick={onClick} className={`chip ${tones[tone]} ${onClick ? "hover:ring-2 hover:ring-violet/40" : ""}`}>
-      {name}
+    <Tag
+      type={isClickable ? "button" : undefined}
+      onClick={handleClick}
+      className={`chip ${tones[tone]} ${isClickable ? "hover:ring-2 hover:ring-violet/40 cursor-pointer" : ""}`}
+    >
+      <span>{name}</span>
       {level ? <LevelDots level={level} /> : null}
-      {verified ? <span title="verified by placement coordinator" className="ml-0.5 font-mono text-[10px]">v</span> : null}
+      {verified ? <span title="verified by faculty" className="ml-0.5 font-mono text-[10px]">v</span> : null}
       {tone === "periwinkle" ? <span title="AI-matched: found using a sentence-embedding model, not an exact name match" className="ml-1 font-mono text-[9px]" aria-hidden="true">✦AI</span> : null}
     </Tag>
   );
@@ -171,7 +177,7 @@ export function ScoreBreakdown({ match }) {
         ))}
       </div>
       <p className="text-xs text-plum/60">
-        Score = weighted credit / total weight. Must-have skills weigh 3, nice-to-have weigh 1. Credit per skill = min(1, your level / needed level), times 1.1 if placement coordinator verified it.
+        Score = weighted credit / total weight. Must-have skills weigh 3, nice-to-have weigh 1. Credit per skill = min(1, your level / needed level), times 1.1 if faculty verified it.
         {related.length > 0 && " A skill you do not have can earn up to 0.4 credit if you know a semantically similar one — measured by embedding similarity, and only the single closest skill counts."}
       </p>
     </div>
@@ -237,6 +243,69 @@ export function AiSimilarityMap({ requiredSkills }) {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+const VERDICT_TONE = { compliant: "teal", not_compliant: "red", unclear: "amber" };
+const VERDICT_LABEL = { compliant: "compliant", not_compliant: "not compliant", unclear: "unclear" };
+
+export function PolicyCheckPanel({ postingId, studentId }) {
+  const [state, setState] = useState("idle"); // idle | loading | done | error
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
+
+  function run() {
+    setState("loading");
+    setError(null);
+    api
+      .policyCheck(postingId, studentId)
+      .then((data) => {
+        setResult(data);
+        setState("done");
+      })
+      .catch((err) => {
+        setError(err.message);
+        setState("error");
+      });
+  }
+
+  return (
+    <div className="rounded-2xl border border-periwinkle/30 bg-periwinkle/10 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 label text-periwinkle">
+          <span aria-hidden="true">✦</span> AI policy check
+        </div>
+        {state !== "loading" && (
+          <button type="button" className="btn-secondary px-3 py-1 text-xs" onClick={run}>
+            {state === "idle" ? "Run policy check" : "Re-run"}
+          </button>
+        )}
+      </div>
+      <p className="mt-1 text-[11px] text-plum/60">
+        Retrieves the most relevant passages from your uploaded company policy documents (TF-IDF text search, not an exact keyword match) and asks an AI model to compare this candidate against them. Informational only — always confirm before rejecting a candidate.
+      </p>
+
+      {state === "loading" && <div className="mt-2 text-xs text-plum/50">Reading policy documents and checking candidate…</div>}
+
+      {state === "error" && (
+        <div className="mt-2 rounded-xl bg-signal/10 px-3 py-2 text-xs text-signal">{error || "Could not run the policy check."}</div>
+      )}
+
+      {state === "done" && result && (
+        <div className="mt-2 grid gap-1.5">
+          {result.verdicts.length === 0 && <div className="text-xs text-plum/50">The AI did not return any rule verdicts.</div>}
+          {result.verdicts.map((verdict, index) => (
+            <div key={index} className="rounded-xl bg-white/70 px-3 py-2 text-xs">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-medium">{verdict.rule}</span>
+                <SkillChip name={VERDICT_LABEL[verdict.verdict] || verdict.verdict} tone={VERDICT_TONE[verdict.verdict] || "amber"} />
+              </div>
+              {verdict.evidence_snippet && <div className="mt-1 text-plum/60">"{verdict.evidence_snippet}"</div>}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

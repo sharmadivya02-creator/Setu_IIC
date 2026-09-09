@@ -1,13 +1,24 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from ..ai import call_groq_json, extract_text_from_pdf
 from ..auth import require_role
 from ..db import get_db
 from ..engine import score_student
-from ..loaders import held_skills_for_students, requirements_of, skill_adjacency, skill_name_map, students_in_batch
-from ..models import Application, Company, Posting, PostingSkill, Skill, Student, User
-from ..schemas import ApplicationOut, CandidateOut, PostingIn, PostingOut, StatusUpdateIn
+from ..loaders import company_chunk_texts, held_skills_for_students, requirements_of, skill_adjacency, skill_name_map, students_in_batch
+from ..models import Application, Company, CompanyDocument, DocumentChunk, Posting, PostingSkill, Skill, Student, User
+from ..rag import POLICY_CATEGORIES, build_policy_prompt, chunk_text, retrieve
+from ..schemas import (
+    ApplicationOut,
+    CandidateOut,
+    CompanyDocumentOut,
+    PolicyCheckResponse,
+    PolicyVerdictOut,
+    PostingIn,
+    PostingOut,
+    StatusUpdateIn,
+)
 from .students import posting_out
 
 router = APIRouter(prefix="/recruiters", tags=["recruiter"], dependencies=[Depends(require_role("recruiter"))])
@@ -232,3 +243,94 @@ def update_status(application_id: int, body: StatusUpdateIn, user: User = Depend
         status=application.status,
         updated_at=application.updated_at,
     )
+
+
+@router.post("/company/documents", response_model=CompanyDocumentOut, status_code=201)
+async def upload_company_document(file: UploadFile = File(...), user: User = Depends(require_role("recruiter")), db: Session = Depends(get_db)):
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(400, "Only PDF files are supported. Please upload a valid .pdf file.")
+
+    content = await file.read()
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(400, "File size exceeds 10 MB limit.")
+
+    company = my_company(db, user)
+    text = extract_text_from_pdf(content)
+    chunks = chunk_text(text)
+    if not chunks:
+        raise HTTPException(400, "Could not extract any readable text from this PDF.")
+
+    document = CompanyDocument(company_id=company.id, filename=file.filename)
+    db.add(document)
+    db.flush()
+    for index, chunk in enumerate(chunks):
+        db.add(DocumentChunk(document_id=document.id, company_id=company.id, chunk_index=index, text=chunk))
+    db.commit()
+    db.refresh(document)
+    return CompanyDocumentOut(id=document.id, filename=document.filename, uploaded_at=document.uploaded_at, chunk_count=len(chunks))
+
+
+@router.get("/company/documents", response_model=list[CompanyDocumentOut])
+def list_company_documents(user: User = Depends(require_role("recruiter")), db: Session = Depends(get_db)):
+    company = my_company(db, user)
+    documents = db.scalars(
+        select(CompanyDocument)
+        .where(CompanyDocument.company_id == company.id)
+        .options(selectinload(CompanyDocument.chunks))
+        .order_by(CompanyDocument.uploaded_at.desc())
+    )
+    return [
+        CompanyDocumentOut(id=document.id, filename=document.filename, uploaded_at=document.uploaded_at, chunk_count=len(document.chunks))
+        for document in documents
+    ]
+
+
+@router.delete("/company/documents/{document_id}", status_code=204)
+def delete_company_document(document_id: int, user: User = Depends(require_role("recruiter")), db: Session = Depends(get_db)):
+    company = my_company(db, user)
+    document = db.scalar(
+        select(CompanyDocument).where(CompanyDocument.id == document_id, CompanyDocument.company_id == company.id)
+    )
+    if document is None:
+        raise HTTPException(404, "Document not found under your company")
+    db.delete(document)
+    db.commit()
+
+
+@router.get("/postings/{posting_id}/candidates/{student_id}/policy-check", response_model=PolicyCheckResponse)
+async def policy_check(posting_id: int, student_id: int, user: User = Depends(require_role("recruiter")), db: Session = Depends(get_db)):
+    company = my_company(db, user)
+    posting = owned_posting(db, user, posting_id)
+    student = db.scalar(
+        select(Student)
+        .where(Student.id == student_id)
+        .options(selectinload(Student.user), selectinload(Student.batch))
+    )
+    if student is None:
+        raise HTTPException(404, "Student not found")
+
+    chunks = company_chunk_texts(db, company.id)
+    if not chunks:
+        raise HTTPException(400, "No policy documents uploaded for your company yet. Upload one under Postings first.")
+
+    candidate_facts = {
+        "full_name": student.user.full_name,
+        "batch": student.batch.name,
+        "cgpa": student.cgpa,
+        "roll_number": student.roll_number,
+    }
+
+    retrieved_by_category = {category: retrieve(chunks, category, k=3) for category in POLICY_CATEGORIES}
+    system_prompt, user_prompt = build_policy_prompt(posting.title, candidate_facts, retrieved_by_category)
+    result = await call_groq_json(system_prompt, user_prompt)
+
+    verdicts = [
+        PolicyVerdictOut(
+            rule=str(item.get("rule", "")),
+            verdict=str(item.get("verdict", "unclear")),
+            evidence_snippet=str(item.get("evidence_snippet", "")),
+            source_chunk_id=item.get("source_chunk_id"),
+        )
+        for item in result.get("verdicts", [])
+    ]
+    return PolicyCheckResponse(candidate_name=student.user.full_name, posting_title=posting.title, verdicts=verdicts)

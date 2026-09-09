@@ -252,3 +252,22 @@ class ResumeParseResponse(BaseModel):
     skills: list[ParsedSkillOut]
     total_detected: int
 
+
+class CompanyDocumentOut(BaseModel):
+    id: int
+    filename: str
+    uploaded_at: datetime
+    chunk_count: int
+
+
+class PolicyVerdictOut(BaseModel):
+    rule: str
+    verdict: str
+    evidence_snippet: str
+    source_chunk_id: int | None = None
+
+
+class PolicyCheckResponse(BaseModel):
+    candidate_name: str
+    posting_title: str
+    verdicts: list[PolicyVerdictOut]

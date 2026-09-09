@@ -30,7 +30,7 @@ from ..schemas import (
     PendingCountOut,
     StudentProfileOut,
 )
-from .students import profile_out
+from .students import invalidate_score_cache, profile_out
 
 router = APIRouter(prefix="/faculty", tags=["placement coordinator"], dependencies=[Depends(require_role("faculty"))])
 FACULTY_CACHE_TTL_SECONDS = 60
@@ -222,3 +222,103 @@ def market_refresh(db: Session = Depends(get_db)):
     total = db.scalar(select(func.count(Posting.id)).where(Posting.source == "market", Posting.active.is_(True)))
     return MarketRefreshOut(imported=imported, skipped=skipped, total_market_postings=total)
 
+
+def serialize_queue_item(req: VerificationRequest) -> FacultyVerificationQueueOut:
+    return FacultyVerificationQueueOut(
+        id=req.id,
+        student_id=req.student_id,
+        student_name=req.student.user.full_name,
+        student_roll=req.student.roll_number,
+        batch_name=req.student.batch.name,
+        student_cgpa=req.student.cgpa,
+        student_email=req.student.user.email,
+        skill_id=req.skill_id,
+        skill_name=req.skill.name,
+        skill_category=req.skill.category,
+        level=req.level,
+        course_name=req.course_name,
+        evidence_url=req.evidence_url,
+        notes=req.notes,
+        status=req.status,
+        reviewed_by=req.reviewed_by,
+        reviewer_name=req.reviewer.full_name if req.reviewer else None,
+        review_feedback=req.review_feedback,
+        created_at=req.created_at,
+        reviewed_at=req.reviewed_at,
+    )
+
+
+@router.get("/verification-requests/count", response_model=PendingCountOut)
+def pending_verifications_count(db: Session = Depends(get_db)):
+    count = db.scalar(
+        select(func.count(VerificationRequest.id)).where(VerificationRequest.status == "pending")
+    ) or 0
+    return PendingCountOut(pending_count=count)
+
+
+@router.get("/verification-requests", response_model=list[FacultyVerificationQueueOut])
+def list_verification_requests(status: str | None = None, db: Session = Depends(get_db)):
+    stmt = (
+        select(VerificationRequest)
+        .options(
+            selectinload(VerificationRequest.student).selectinload(Student.user),
+            selectinload(VerificationRequest.student).selectinload(Student.batch),
+            selectinload(VerificationRequest.skill),
+            selectinload(VerificationRequest.reviewer),
+        )
+        .order_by(VerificationRequest.created_at.desc())
+    )
+    if status and status != "all":
+        stmt = stmt.where(VerificationRequest.status == status)
+
+    requests = db.scalars(stmt).all()
+    return [serialize_queue_item(req) for req in requests]
+
+
+@router.post("/verification-requests/{request_id}/review", response_model=FacultyVerificationQueueOut)
+def review_verification_request(
+    request_id: int,
+    body: FacultyVerificationReviewIn,
+    faculty: User = Depends(require_role("faculty")),
+    db: Session = Depends(get_db),
+):
+    req = db.execute(
+        select(VerificationRequest)
+        .where(VerificationRequest.id == request_id)
+        .options(
+            selectinload(VerificationRequest.student).selectinload(Student.user),
+            selectinload(VerificationRequest.student).selectinload(Student.batch),
+            selectinload(VerificationRequest.skill),
+            selectinload(VerificationRequest.reviewer),
+        )
+    ).scalar_one_or_none()
+
+    if req is None:
+        raise HTTPException(404, "Verification request not found")
+
+    if body.action == "approve":
+        req.status = "approved"
+        req.reviewed_by = faculty.id
+        req.reviewed_at = datetime.now()
+        req.review_feedback = body.feedback
+
+        skill_link = db.get(StudentSkill, (req.student_id, req.skill_id))
+        if skill_link is not None:
+            skill_link.verified = True
+            skill_link.verified_by = faculty.id
+            if req.level:
+                skill_link.level = req.level
+
+        invalidate_score_cache(req.student.user_id)
+    elif body.action == "reject":
+        req.status = "rejected"
+        req.reviewed_by = faculty.id
+        req.reviewed_at = datetime.now()
+        req.review_feedback = body.feedback
+    else:
+        raise HTTPException(400, "Invalid action. Must be 'approve' or 'reject'.")
+
+    db.commit()
+    clear_faculty_cache()
+    db.refresh(req)
+    return serialize_queue_item(req)

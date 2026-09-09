@@ -22,15 +22,21 @@ export default function StudentSkills() {
   const [showToast, toast] = useToast();
   const fileInputRef = useRef(null);
 
+  const [verificationRequests, setVerificationRequests] = useState([]);
+  const [verifyModalSkill, setVerifyModalSkill] = useState(null);
+  const [verifyForm, setVerifyForm] = useState({ course_name: "", evidence_url: "", notes: "" });
+  const [submittingVerify, setSubmittingVerify] = useState(false);
+
   useEffect(() => {
     // Pre-warm cached sample resume in memory on mount for instantaneous zero-delay access
     getCachedSampleResume();
 
-    Promise.all([api.skills(), api.studentProfile()])
-      .then(([skills, profileData]) => {
+    Promise.all([api.skills(), api.studentProfile(), api.myVerificationRequests().catch(() => [])])
+      .then(([skills, profileData, vRequests]) => {
         setTaxonomy(skills);
         setProfile(profileData);
         setLevels(Object.fromEntries(profileData.skills.map((skill) => [skill.skill_id, skill.level])));
+        setVerificationRequests(vRequests || []);
       })
       .catch((err) => setError(err.message));
   }, []);
@@ -43,6 +49,43 @@ export default function StudentSkills() {
   }, [taxonomy, query, category]);
 
   const verifiedIds = useMemo(() => new Set((profile?.skills || []).filter((skill) => skill.verified).map((skill) => skill.skill_id)), [profile]);
+
+  const pendingRequestMap = useMemo(() => {
+    const map = new Map();
+    for (const req of verificationRequests) {
+      if (req.status === "pending") {
+        map.set(req.skill_id, req);
+      }
+    }
+    return map;
+  }, [verificationRequests]);
+
+  function openVerifyModal(skill) {
+    setVerifyModalSkill(skill);
+    setVerifyForm({ course_name: "", evidence_url: "", notes: "" });
+  }
+
+  async function handleVerificationSubmit(e) {
+    e.preventDefault();
+    if (!verifyModalSkill) return;
+
+    setSubmittingVerify(true);
+    try {
+      const created = await api.submitVerificationRequest({
+        skill_id: verifyModalSkill.id,
+        course_name: verifyForm.course_name.trim() || undefined,
+        evidence_url: verifyForm.evidence_url.trim() || undefined,
+        notes: verifyForm.notes.trim() || undefined,
+      });
+      setVerificationRequests((prev) => [created, ...prev.filter((r) => r.skill_id !== verifyModalSkill.id)]);
+      showToast(`Verification requested for ${verifyModalSkill.name}. Faculty notified.`);
+      setVerifyModalSkill(null);
+    } catch (err) {
+      showToast(err.message || "Failed to submit verification request", "error");
+    } finally {
+      setSubmittingVerify(false);
+    }
+  }
 
   function setLevel(skillId, level) {
     setLevels((current) => {
@@ -267,7 +310,7 @@ export default function StudentSkills() {
               </span>
             ) : (
               <span className="inline-flex items-center gap-1.5">
-                <span>📄</span> Auto-fill from Resume (PDF)
+                <span></span> Auto-fill from Resume (PDF)
               </span>
             )}
           </button>
@@ -300,9 +343,8 @@ export default function StudentSkills() {
       )}
 
       <section
-        className={`card transition-colors ${
-          isDragging ? "border-2 border-dashed border-plum bg-petal/40" : ""
-        }`}
+        className={`card transition-colors ${isDragging ? "border-2 border-dashed border-plum bg-petal/40" : ""
+          }`}
       >
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="font-display text-2xl">Selected ({selected.length})</h2>
@@ -311,11 +353,10 @@ export default function StudentSkills() {
         <div className="mt-3 flex flex-wrap gap-2">
           {selected.length === 0 && (
             <div
-              className={`w-full rounded-2xl border-2 border-dashed p-6 text-center transition-colors ${
-                isDragging
-                  ? "border-plum bg-white/90"
-                  : "border-violet/30 bg-petal/20"
-              }`}
+              className={`w-full rounded-2xl border-2 border-dashed p-6 text-center transition-colors ${isDragging
+                ? "border-plum bg-white/90"
+                : "border-violet/30 bg-petal/20"
+                }`}
             >
               <div className="text-sm font-medium text-plum">No skills selected yet.</div>
               <p className="mt-1 text-xs text-plum/60">
@@ -342,9 +383,58 @@ export default function StudentSkills() {
               </div>
             </div>
           )}
-          {selected.map((skill) => (
-            <SkillChip key={skill.id} name={skill.name} level={levels[skill.id]} verified={verifiedIds.has(skill.id) && levels[skill.id] === profile.skills.find((item) => item.skill_id === skill.id)?.level} tone="plum" onRemove={() => setLevel(skill.id, 0)} />
-          ))}
+          {selected.map((skill) => {
+            const currentLevel = levels[skill.id];
+            const isVerified = verifiedIds.has(skill.id) && currentLevel === profile.skills.find((item) => item.skill_id === skill.id)?.level;
+            const pendingRequest = pendingRequestMap.get(skill.id);
+
+            return (
+              <div
+                key={skill.id}
+                className="inline-flex items-center gap-2 rounded-2xl border border-plum/15 bg-white/90 px-3 py-1.5 shadow-xs transition-all hover:border-plum/30"
+              >
+                <div className="flex items-center gap-1.5">
+                  <span className="font-medium text-sm text-plum">{skill.name}</span>
+                  <LevelDots level={currentLevel} />
+                </div>
+
+                {isVerified ? (
+                  <span
+                    title="Verified by faculty coordinator"
+                    className="inline-flex items-center gap-0.5 rounded-full bg-teal/15 px-2 py-0.5 font-mono text-[10px] font-semibold text-teal"
+                  >
+                    Verified
+                  </span>
+                ) : pendingRequest ? (
+                  <span
+                    title={`Verification pending review (Course: ${pendingRequest.course_name || "Coursework"})`}
+                    className="inline-flex items-center gap-1 rounded-full bg-amber/15 px-2 py-0.5 font-mono text-[10px] font-semibold text-amber"
+                  >
+                    <span className="animate-pulse"></span> Pending Review
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => openVerifyModal(skill)}
+                    title="Request faculty verification with coursework or project link"
+                    className="rounded-full border border-plum/20 bg-plum/5 px-2 py-0.5 text-[11px] font-medium text-plum hover:bg-plum hover:text-cream transition-colors"
+                  >
+                    Request Verify
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setLevel(skill.id, 0)}
+                  title={`Remove ${skill.name}`}
+                  className="ml-0.5 text-xs text-plum/40 hover:text-signal transition-colors"
+                  aria-label={`Remove ${skill.name}`}
+                >
+                  ✕
+                </button>
+              </div>
+            );
+          })}
         </div>
       </section>
 
@@ -474,9 +564,8 @@ export default function StudentSkills() {
                   return (
                     <div
                       key={skill.skill_id}
-                      className={`flex flex-col gap-2 rounded-2xl border p-3 transition-colors sm:flex-row sm:items-center sm:justify-between ${
-                        item.selected ? "border-violet/40 bg-white/90 shadow-sm" : "border-transparent bg-white/40 opacity-60"
-                      }`}
+                      className={`flex flex-col gap-2 rounded-2xl border p-3 transition-colors sm:flex-row sm:items-center sm:justify-between ${item.selected ? "border-violet/40 bg-white/90 shadow-sm" : "border-transparent bg-white/40 opacity-60"
+                        }`}
                     >
                       <div className="flex items-start gap-3">
                         <input
@@ -510,11 +599,10 @@ export default function StudentSkills() {
                             type="button"
                             title={LEVEL_NAMES[value]}
                             onClick={() => setExtractedLevel(skill.skill_id, value)}
-                            className={`h-7 w-7 rounded-full font-mono text-xs transition-colors ${
-                              value <= item.level
-                                ? "bg-plum text-cream"
-                                : "bg-plum/10 text-plum/60 hover:bg-plum/20"
-                            }`}
+                            className={`h-7 w-7 rounded-full font-mono text-xs transition-colors ${value <= item.level
+                              ? "bg-plum text-cream"
+                              : "bg-plum/10 text-plum/60 hover:bg-plum/20"
+                              }`}
                           >
                             {value}
                           </button>
@@ -556,6 +644,76 @@ export default function StudentSkills() {
               </div>
             </div>
           </div>
+        )}
+      </Modal>
+
+      <Modal
+        open={Boolean(verifyModalSkill)}
+        onClose={() => setVerifyModalSkill(null)}
+        title={`Request Faculty Verification: ${verifyModalSkill?.name || ""}`}
+      >
+        {verifyModalSkill && (
+          <form onSubmit={handleVerificationSubmit} className="space-y-4">
+            <div className="rounded-2xl border border-violet/20 bg-petal/30 p-3 text-xs text-plum/80">
+              <div className="font-semibold text-plum mb-0.5">
+                Claimed Proficiency: Level {levels[verifyModalSkill.id]} ({LEVEL_NAMES[levels[verifyModalSkill.id]]})
+              </div>
+              <div>
+                Faculty placement coordinators will review your coursework, lab repository, or practical project evidence before validating the skill. Verified credentials carry bonus weight in recruiter candidate search.
+              </div>
+            </div>
+
+            <div>
+              <label className="label">Course / Lab Context</label>
+              <input
+                type="text"
+                className="input w-full mt-1"
+                placeholder="e.g. CS-302 Web Architectures or Minor Capstone"
+                value={verifyForm.course_name}
+                onChange={(e) => setVerifyForm({ ...verifyForm, course_name: e.target.value })}
+              />
+            </div>
+
+            <div>
+              <label className="label">Evidence / Repository URL</label>
+              <input
+                type="url"
+                className="input w-full mt-1"
+                placeholder="https://github.com/your-username/project-repo"
+                value={verifyForm.evidence_url}
+                onChange={(e) => setVerifyForm({ ...verifyForm, evidence_url: e.target.value })}
+              />
+            </div>
+
+            <div>
+              <label className="label">Implementation Notes & Practical Experience</label>
+              <textarea
+                rows={3}
+                className="input w-full mt-1"
+                placeholder="Briefly describe what you built (architecture, features implemented, APIs integrated)..."
+                value={verifyForm.notes}
+                onChange={(e) => setVerifyForm({ ...verifyForm, notes: e.target.value })}
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-petal/60">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setVerifyModalSkill(null)}
+                disabled={submittingVerify}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="btn-primary"
+                disabled={submittingVerify}
+              >
+                {submittingVerify ? "Submitting..." : "Submit for Faculty Review"}
+              </button>
+            </div>
+          </form>
         )}
       </Modal>
     </div>

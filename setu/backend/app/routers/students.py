@@ -1,13 +1,13 @@
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy import select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from ..ai import extract_skills_with_groq, extract_text_from_pdf
 from ..auth import require_role
 from ..db import get_db
 from ..engine import learn_next, score_student
 from ..loaders import active_postings_with_requirements, held_skills_for_student, requirements_of, skill_adjacency, skill_name_map
-from ..models import Application, Posting, Skill, Student, StudentSkill, User
+from ..models import Application, Posting, Skill, Student, StudentSkill, User, VerificationRequest
 from ..schemas import (
     ApplicationOut,
     LearnNextOut,
@@ -20,6 +20,8 @@ from ..schemas import (
     StudentProfileUpdate,
     StudentSkillIn,
     StudentSkillOut,
+    VerificationRequestCreate,
+    VerificationRequestOut,
 )
 
 router = APIRouter(prefix="/students", tags=["student"], dependencies=[Depends(require_role("student"))])
@@ -268,4 +270,103 @@ def my_applications(user: User = Depends(require_role("student")), db: Session =
             updated_at=app.updated_at,
         )
         for app in applications
+    ]
+
+
+def invalidate_score_cache(user_id: int) -> None:
+    pass
+
+
+@router.post("/me/verification-requests", response_model=VerificationRequestOut, status_code=201)
+def request_verification(
+    body: VerificationRequestCreate,
+    user: User = Depends(require_role("student")),
+    db: Session = Depends(get_db),
+):
+    student = load_student(db, user)
+    skill_link = db.get(StudentSkill, (student.id, body.skill_id))
+    if skill_link is None:
+        raise HTTPException(400, "You must first add this skill to your profile before requesting verification.")
+    if skill_link.verified:
+        raise HTTPException(400, "This skill is already verified.")
+
+    existing = db.execute(
+        select(VerificationRequest)
+        .where(
+            VerificationRequest.student_id == student.id,
+            VerificationRequest.skill_id == body.skill_id,
+            VerificationRequest.status == "pending",
+        )
+    ).scalar_one_or_none()
+
+    if existing is not None:
+        existing.level = skill_link.level
+        existing.course_name = body.course_name
+        existing.evidence_url = body.evidence_url
+        existing.notes = body.notes
+        db.commit()
+        db.refresh(existing)
+        req = existing
+    else:
+        req = VerificationRequest(
+            student_id=student.id,
+            skill_id=body.skill_id,
+            level=skill_link.level,
+            course_name=body.course_name,
+            evidence_url=body.evidence_url,
+            notes=body.notes,
+            status="pending",
+        )
+        db.add(req)
+        db.commit()
+        db.refresh(req)
+
+    skill = db.get(Skill, body.skill_id)
+    return VerificationRequestOut(
+        id=req.id,
+        skill_id=req.skill_id,
+        skill_name=skill.name,
+        skill_category=skill.category,
+        level=req.level,
+        course_name=req.course_name,
+        evidence_url=req.evidence_url,
+        notes=req.notes,
+        status=req.status,
+        reviewed_by=req.reviewed_by,
+        review_feedback=req.review_feedback,
+        created_at=req.created_at,
+        reviewed_at=req.reviewed_at,
+    )
+
+
+@router.get("/me/verification-requests", response_model=list[VerificationRequestOut])
+def my_verification_requests(
+    user: User = Depends(require_role("student")),
+    db: Session = Depends(get_db),
+):
+    student = load_student(db, user)
+    requests = db.scalars(
+        select(VerificationRequest)
+        .where(VerificationRequest.student_id == student.id)
+        .options(joinedload(VerificationRequest.skill))
+        .order_by(VerificationRequest.created_at.desc())
+    ).all()
+
+    return [
+        VerificationRequestOut(
+            id=req.id,
+            skill_id=req.skill_id,
+            skill_name=req.skill.name,
+            skill_category=req.skill.category,
+            level=req.level,
+            course_name=req.course_name,
+            evidence_url=req.evidence_url,
+            notes=req.notes,
+            status=req.status,
+            reviewed_by=req.reviewed_by,
+            review_feedback=req.review_feedback,
+            created_at=req.created_at,
+            reviewed_at=req.reviewed_at,
+        )
+        for req in requests
     ]

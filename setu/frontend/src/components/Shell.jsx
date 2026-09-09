@@ -1,4 +1,6 @@
+import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { api } from "../api";
 import { useAuth } from "../auth";
 
 const NAV = {
@@ -10,6 +12,7 @@ const NAV = {
   ],
   faculty: [
     { to: "/faculty", label: "Analytics", end: true },
+    { to: "/faculty/verifications", label: "Verifications", badgeKey: "verifications" },
     { to: "/faculty/students", label: "Students" },
     { to: "/faculty/market", label: "Market feed" },
   ],
@@ -25,6 +28,16 @@ export default function Shell() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const links = NAV[user.role];
+  const [pendingVerifications, setPendingVerifications] = useState(0);
+
+  useEffect(() => {
+    if (user.role === "faculty") {
+      api
+        .facultyPendingVerificationsCount()
+        .then((data) => setPendingVerifications(data.pending_count || 0))
+        .catch(() => {});
+    }
+  }, [user.role]);
 
   return (
     <div className="flex min-h-screen bg-cream">
@@ -44,10 +57,17 @@ export default function Shell() {
                 to={link.to}
                 end={link.end}
                 className={({ isActive }) =>
-                  `rounded-2xl px-4 py-2.5 text-sm font-medium transition-colors ${isActive ? "bg-white text-plum shadow-soft" : "text-plum/70 hover:bg-white/60"}`
+                  `flex items-center justify-between rounded-2xl px-4 py-2.5 text-sm font-medium transition-colors ${
+                    isActive ? "bg-white text-plum shadow-soft" : "text-plum/70 hover:bg-white/60"
+                  }`
                 }
               >
-                {link.label}
+                <span>{link.label}</span>
+                {link.badgeKey === "verifications" && pendingVerifications > 0 && (
+                  <span className="rounded-full bg-amber/20 px-2 py-0.5 font-mono text-[11px] font-semibold text-amber">
+                    {pendingVerifications}
+                  </span>
+                )}
               </NavLink>
             ))}
           </nav>
@@ -74,7 +94,8 @@ export default function Shell() {
           <nav className="flex gap-2 overflow-x-auto">
             {links.map((link) => (
               <NavLink key={link.to} to={link.to} end={link.end} className={({ isActive }) => `chip ${isActive ? "bg-plum text-cream" : "bg-white"}`}>
-                {link.label}
+                <span>{link.label}</span>
+                {link.badgeKey === "verifications" && pendingVerifications > 0 && ` (${pendingVerifications})`}
               </NavLink>
             ))}
           </nav>

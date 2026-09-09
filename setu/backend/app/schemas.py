@@ -252,3 +252,58 @@ class ResumeParseResponse(BaseModel):
     skills: list[ParsedSkillOut]
     total_detected: int
 
+
+class VerificationRequestCreate(BaseModel):
+    skill_id: int
+    course_name: str | None = None
+    evidence_url: str | None = None
+    notes: str | None = None
+
+
+class VerificationRequestOut(BaseModel):
+    id: int
+    skill_id: int
+    skill_name: str
+    skill_category: str
+    level: int
+    course_name: str | None
+    evidence_url: str | None
+    notes: str | None
+    status: str
+    reviewed_by: int | None
+    review_feedback: str | None
+    created_at: datetime
+    reviewed_at: datetime | None
+
+
+class FacultyVerificationReviewIn(BaseModel):
+    action: Literal["approve", "reject"]
+    feedback: str | None = None
+
+
+class FacultyVerificationQueueOut(BaseModel):
+    id: int
+    student_id: int
+    student_name: str
+    student_roll: str
+    batch_name: str
+    student_cgpa: float
+    student_email: str
+    skill_id: int
+    skill_name: str
+    skill_category: str
+    level: int
+    course_name: str | None
+    evidence_url: str | None
+    notes: str | None
+    status: str
+    reviewed_by: int | None
+    reviewer_name: str | None
+    review_feedback: str | None
+    created_at: datetime
+    reviewed_at: datetime | None
+
+
+class PendingCountOut(BaseModel):
+    pending_count: int
+

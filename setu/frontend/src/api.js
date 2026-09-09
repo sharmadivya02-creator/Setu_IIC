@@ -83,7 +83,8 @@ export const api = {
   studentGaps: () => get("/students/me/gaps"),
   apply: (postingId) => post(`/students/me/apply/${postingId}`),
   studentApplications: () => get("/students/me/applications"),
-
+  submitVerificationRequest: (form) => post("/students/me/verification-requests", form),
+  myVerificationRequests: () => get("/students/me/verification-requests"),
 
   analytics: (batchId) => get(`/faculty/analytics${batchId ? `?batch_id=${batchId}` : ""}`),
   facultyStudents: (batchId) => get(`/faculty/students${batchId ? `?batch_id=${batchId}` : ""}`),
@@ -91,6 +92,9 @@ export const api = {
   addStudent: (form) => post("/faculty/students", form),
   editStudent: (id, form) => put(`/faculty/students/${id}`, form),
   verifySkill: (studentId, skillId, verified) => post(`/faculty/students/${studentId}/skills/${skillId}/verify?verified=${verified}`),
+  facultyVerificationRequests: (status) => get(`/faculty/verification-requests${status ? `?status=${status}` : ""}`),
+  facultyPendingVerificationsCount: () => get("/faculty/verification-requests/count"),
+  reviewVerificationRequest: (requestId, form) => post(`/faculty/verification-requests/${requestId}/review`, form),
   refreshMarket: () => post("/faculty/market/refresh"),
 
   recruiterPostings: () => get("/recruiters/postings"),

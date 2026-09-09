@@ -67,6 +67,7 @@ class Student(Base):
     batch: Mapped[Batch] = relationship(back_populates="students")
     skills: Mapped[list["StudentSkill"]] = relationship(back_populates="student", cascade="all, delete-orphan")
     applications: Mapped[list["Application"]] = relationship(back_populates="student")
+    verification_requests: Mapped[list["VerificationRequest"]] = relationship(back_populates="student", cascade="all, delete-orphan")
 
 
 class Skill(Base):
@@ -166,3 +167,24 @@ class Application(Base):
 
     student: Mapped[Student] = relationship(back_populates="applications")
     posting: Mapped[Posting] = relationship(back_populates="applications")
+
+
+class VerificationRequest(Base):
+    __tablename__ = "verification_requests"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    student_id: Mapped[int] = mapped_column(ForeignKey("students.id", ondelete="CASCADE"), index=True)
+    skill_id: Mapped[int] = mapped_column(ForeignKey("skills.id"), index=True)
+    level: Mapped[int] = mapped_column(Integer)
+    course_name: Mapped[str | None] = mapped_column(String(120))
+    evidence_url: Mapped[str | None] = mapped_column(String(500))
+    notes: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
+    reviewed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    review_feedback: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+    student: Mapped[Student] = relationship(back_populates="verification_requests")
+    skill: Mapped[Skill] = relationship()
+    reviewer: Mapped[User | None] = relationship(foreign_keys=[reviewed_by])

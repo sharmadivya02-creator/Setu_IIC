@@ -12,6 +12,7 @@ import StudentApplications from "./pages/student/Applications";
 import FacultyAnalytics from "./pages/faculty/Analytics";
 import FacultyStudents from "./pages/faculty/Students";
 import FacultyMarket from "./pages/faculty/Market";
+import FacultyVerifications from "./pages/faculty/Verifications";
 import RecruiterPostings from "./pages/recruiter/Postings";
 import RecruiterCandidates from "./pages/recruiter/Candidates";
 import RecruiterPipeline from "./pages/recruiter/Pipeline";
@@ -55,6 +56,7 @@ function App() {
         }
       >
         <Route index element={<FacultyAnalytics />} />
+        <Route path="verifications" element={<FacultyVerifications />} />
         <Route path="students" element={<FacultyStudents />} />
         <Route path="market" element={<FacultyMarket />} />
       </Route>

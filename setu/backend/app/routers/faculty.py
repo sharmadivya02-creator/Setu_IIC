@@ -1,4 +1,5 @@
 import time
+from datetime import datetime
 from threading import Lock
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -17,13 +18,16 @@ from ..loaders import (
     students_in_batch,
 )
 from ..market import refresh_market_postings
-from ..models import Batch, Posting, Student, StudentSkill, User
+from ..models import Batch, Posting, Student, StudentSkill, User, VerificationRequest
 from ..schemas import (
     AnalyticsOut,
     FacultyStudentCreate,
     FacultyStudentOut,
     FacultyStudentUpdate,
+    FacultyVerificationQueueOut,
+    FacultyVerificationReviewIn,
     MarketRefreshOut,
+    PendingCountOut,
     StudentProfileOut,
 )
 from .students import profile_out
@@ -217,5 +221,4 @@ def market_refresh(db: Session = Depends(get_db)):
     clear_faculty_cache()
     total = db.scalar(select(func.count(Posting.id)).where(Posting.source == "market", Posting.active.is_(True)))
     return MarketRefreshOut(imported=imported, skipped=skipped, total_market_postings=total)
-import time
-from threading import Lock
+

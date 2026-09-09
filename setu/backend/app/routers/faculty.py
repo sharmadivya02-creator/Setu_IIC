@@ -1,7 +1,9 @@
+import logging
 import time
 from datetime import datetime
 from threading import Lock
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
@@ -31,6 +33,8 @@ from ..schemas import (
     StudentProfileOut,
 )
 from .students import invalidate_score_cache, profile_out
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/faculty", tags=["placement coordinator"], dependencies=[Depends(require_role("faculty"))])
 FACULTY_CACHE_TTL_SECONDS = 60
@@ -217,7 +221,18 @@ def verify_skill(student_id: int, skill_id: int, verified: bool = True, faculty:
 
 @router.post("/market/refresh", response_model=MarketRefreshOut)
 def market_refresh(db: Session = Depends(get_db)):
-    imported, skipped = refresh_market_postings(db)
+    try:
+        imported, skipped = refresh_market_postings(db)
+    except httpx.HTTPError as error:
+        # The public job feed is a third party. If it is down, rate-limiting us,
+        # or unreachable from this host, that must not surface as a raw 500 --
+        # the postings already imported stay valid and every other feature works.
+        db.rollback()
+        logger.warning("market refresh failed: %s", error)
+        raise HTTPException(
+            503,
+            "The live job feed is not reachable right now. Existing market postings are unaffected - please try again in a few minutes.",
+        ) from error
     clear_faculty_cache()
     total = db.scalar(select(func.count(Posting.id)).where(Posting.source == "market", Posting.active.is_(True)))
     return MarketRefreshOut(imported=imported, skipped=skipped, total_market_postings=total)

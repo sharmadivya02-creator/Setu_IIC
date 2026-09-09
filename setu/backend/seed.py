@@ -19,6 +19,7 @@ from app.models import (
     Student,
     StudentSkill,
     User,
+    VerificationRequest,
 )
 from app.similarity import build_pairs, load_vectors
 
@@ -250,6 +251,30 @@ def run():
     db.flush()
     for skill_name, level, verified in [("Python", 4, True), ("SQL", 3, True), ("PostgreSQL", 3, False), ("REST APIs", 3, False), ("Git", 4, True), ("FastAPI", 2, False), ("React", 2, False), ("Data Structures & Algorithms", 3, True), ("Communication", 4, False), ("Pandas", 2, False)]:
         db.add(StudentSkill(student_id=demo_student.id, skill_id=skills_by_name[skill_name].id, level=level, verified=verified, verified_by=faculty_user.id if verified else None))
+
+    # Seed verification requests for demo student
+    db.add(
+        VerificationRequest(
+            student_id=demo_student.id,
+            skill_id=skills_by_name["FastAPI"].id,
+            level=2,
+            course_name="CS-302 Web Architectures",
+            evidence_url="https://github.com/shivam/fastapi-ecommerce-service",
+            notes="Implemented async REST APIs with JWT authentication, Pydantic validation, and SQLite persistence for the 5th semester lab project.",
+            status="pending",
+        )
+    )
+    db.add(
+        VerificationRequest(
+            student_id=demo_student.id,
+            skill_id=skills_by_name["PostgreSQL"].id,
+            level=3,
+            course_name="CS-204 Database Systems",
+            evidence_url="https://github.com/shivam/sql-indexing-benchmark",
+            notes="Designed relational schemas with foreign keys, composite indexes, and complex analytical window queries for the course capstone.",
+            status="pending",
+        )
+    )
 
     statuses = ["applied", "applied", "applied", "shortlisted", "interview", "rejected", "offered"]
     for posting in postings[:10]:

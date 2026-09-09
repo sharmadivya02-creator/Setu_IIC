@@ -3,7 +3,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 
 from .config import CORS_ORIGINS
+from .db import Base, engine
 from .routers import auth, faculty, recruiters, skills, students
+
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="Setu API",

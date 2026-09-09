@@ -1,13 +1,21 @@
+import time
+from threading import Lock
+
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from ..ai import extract_skills_with_groq, extract_text_from_pdf
-from ..auth import require_role
+from ..auth import invalidate_cached_user, require_role
 from ..db import get_db
 from ..engine import learn_next, score_student
+ ai
 from ..loaders import active_postings_with_requirements, held_skills_for_student, requirements_of, skill_adjacency, skill_name_map
 from ..models import Application, Posting, Skill, Student, StudentSkill, User, VerificationRequest
+
+from ..loaders import Held, active_postings_with_requirements, requirements_of, skill_adjacency, skill_name_map
+from ..models import Application, Posting, Skill, Student, StudentSkill, User
+ main
 from ..schemas import (
     ApplicationOut,
     LearnNextOut,
@@ -25,14 +33,38 @@ from ..schemas import (
 )
 
 router = APIRouter(prefix="/students", tags=["student"], dependencies=[Depends(require_role("student"))])
+SCORE_CACHE_TTL_SECONDS = 60
+_matches_cache: dict[int, tuple[float, tuple[MatchOut, ...]]] = {}
+_gaps_cache: dict[int, tuple[float, tuple[LearnNextOut, ...]]] = {}
+_applications_cache: dict[int, tuple[float, tuple[ApplicationOut, ...]]] = {}
+_score_cache_lock = Lock()
+
+
+def invalidate_score_cache(user_id: int) -> None:
+    with _score_cache_lock:
+        _matches_cache.pop(user_id, None)
+        _gaps_cache.pop(user_id, None)
+        _applications_cache.pop(user_id, None)
+
+
+def cached_score(cache: dict, user_id: int):
+    with _score_cache_lock:
+        entry = cache.get(user_id)
+        if entry is not None and time.monotonic() - entry[0] < SCORE_CACHE_TTL_SECONDS:
+            return list(entry[1])
+    return None
 
 
 def load_student(db: Session, user: User) -> Student:
-    student = db.scalar(
+    student = db.execute(
         select(Student)
         .where(Student.user_id == user.id)
-        .options(selectinload(Student.skills).selectinload(StudentSkill.skill), selectinload(Student.batch))
-    )
+        .options(
+            joinedload(Student.user),
+            joinedload(Student.batch),
+            joinedload(Student.skills).joinedload(StudentSkill.skill),
+        )
+    ).unique().scalar_one_or_none()
     if student is None:
         raise HTTPException(404, "No student profile for this account")
     return student
@@ -79,6 +111,11 @@ def profile_out(student: Student) -> StudentProfileOut:
     )
 
 
+def held_skills(student: Student) -> dict[int, Held]:
+    """Build the scoring input from skills already eager-loaded with the profile."""
+    return {skill.skill_id: Held(level=skill.level, verified=skill.verified) for skill in student.skills}
+
+
 @router.get("/me", response_model=StudentProfileOut)
 def my_profile(user: User = Depends(require_role("student")), db: Session = Depends(get_db)):
     return profile_out(load_student(db, user))
@@ -95,6 +132,7 @@ def update_profile(body: StudentProfileUpdate, user: User = Depends(require_role
             setattr(student, field, value)
     db.commit()
     db.refresh(student)
+    invalidate_cached_user(user.id)
     return profile_out(student)
 
 
@@ -118,6 +156,7 @@ def replace_skills(body: list[StudentSkillIn], user: User = Depends(require_role
             student.skills.append(StudentSkill(skill_id=skill_id, level=level))
     student.skills = [ss for ss in student.skills if ss.skill_id in wanted]
     db.commit()
+    invalidate_score_cache(user.id)
     return profile_out(load_student(db, user))
 
 
@@ -127,6 +166,8 @@ async def parse_resume(
     user: User = Depends(require_role("student")),
     db: Session = Depends(get_db),
 ):
+    if user is None:
+        raise HTTPException(401, "Authentication required.")
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(400, "Only PDF files are supported. Please upload a valid .pdf file.")
 
@@ -187,8 +228,11 @@ async def parse_resume(
 @router.get("/me/matches", response_model=list[MatchOut])
 
 def my_matches(user: User = Depends(require_role("student")), db: Session = Depends(get_db)):
+    cached = cached_score(_matches_cache, user.id)
+    if cached is not None:
+        return cached
     student = load_student(db, user)
-    held = held_skills_for_student(db, student.id)
+    held = held_skills(student)
     postings = active_postings_with_requirements(db)
     adjacency = skill_adjacency(db)
     skill_names = skill_name_map(db)
@@ -215,15 +259,23 @@ def my_matches(user: User = Depends(require_role("student")), db: Session = Depe
             )
         )
     matches.sort(key=lambda match: match.score, reverse=True)
+    with _score_cache_lock:
+        _matches_cache[user.id] = (time.monotonic(), tuple(matches))
     return matches
 
 
 @router.get("/me/gaps", response_model=list[LearnNextOut])
 def my_gaps(user: User = Depends(require_role("student")), db: Session = Depends(get_db)):
+    cached = cached_score(_gaps_cache, user.id)
+    if cached is not None:
+        return cached
     student = load_student(db, user)
-    held = held_skills_for_student(db, student.id)
+    held = held_skills(student)
     postings = active_postings_with_requirements(db)
-    return learn_next(held, [requirements_of(posting) for posting in postings], adjacency=skill_adjacency(db))
+    gaps = learn_next(held, [requirements_of(posting) for posting in postings], adjacency=skill_adjacency(db))
+    with _score_cache_lock:
+        _gaps_cache[user.id] = (time.monotonic(), tuple(gaps))
+    return gaps
 
 
 @router.post("/me/apply/{posting_id}", response_model=ApplicationOut, status_code=201)
@@ -241,6 +293,7 @@ def apply(posting_id: int, user: User = Depends(require_role("student")), db: Se
     db.add(application)
     db.commit()
     db.refresh(application)
+    invalidate_score_cache(user.id)
     return ApplicationOut(
         id=application.id,
         posting_id=posting_id,
@@ -253,6 +306,9 @@ def apply(posting_id: int, user: User = Depends(require_role("student")), db: Se
 
 @router.get("/me/applications", response_model=list[ApplicationOut])
 def my_applications(user: User = Depends(require_role("student")), db: Session = Depends(get_db)):
+    cached = cached_score(_applications_cache, user.id)
+    if cached is not None:
+        return cached
     student = load_student(db, user)
     applications = db.scalars(
         select(Application)
@@ -260,7 +316,7 @@ def my_applications(user: User = Depends(require_role("student")), db: Session =
         .options(selectinload(Application.posting).selectinload(Posting.company))
         .order_by(Application.updated_at.desc())
     )
-    return [
+    result = [
         ApplicationOut(
             id=app.id,
             posting_id=app.posting_id,
@@ -271,6 +327,7 @@ def my_applications(user: User = Depends(require_role("student")), db: Session =
         )
         for app in applications
     ]
+ai
 
 
 def invalidate_score_cache(user_id: int) -> None:
@@ -370,3 +427,10 @@ def my_verification_requests(
         )
         for req in requests
     ]
+
+    with _score_cache_lock:
+        _applications_cache[user.id] = (time.monotonic(), tuple(result))
+    return result
+import time
+from threading import Lock
+ main

@@ -2,7 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from .engine import Held, Requirement
-from .models import Posting, PostingSkill, Skill, SkillSimilarity, Student, StudentSkill
+from .models import DocumentChunk, Posting, PostingSkill, Skill, SkillSimilarity, Student, StudentSkill
 
 
 def skill_name_map(db: Session) -> dict[int, str]:
@@ -53,6 +53,17 @@ def requirements_of(posting: Posting) -> list[Requirement]:
         Requirement(skill_id=ps.skill_id, skill_name=ps.skill.name, min_level=ps.min_level, importance=ps.importance)
         for ps in posting.required_skills
     ]
+
+
+def company_chunk_texts(db: Session, company_id: int) -> list[str]:
+
+    return list(
+        db.scalars(
+            select(DocumentChunk.text)
+            .where(DocumentChunk.company_id == company_id)
+            .order_by(DocumentChunk.document_id, DocumentChunk.chunk_index)
+        )
+    )
 
 
 def students_in_batch(db: Session, batch_id: int | None) -> list[Student]:

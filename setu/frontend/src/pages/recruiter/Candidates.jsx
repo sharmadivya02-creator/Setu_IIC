@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../../api";
-import { Empty, ErrorNote, Loading, Modal, Ring, ScoreBreakdown, SkillChip, scoreColor, useToast } from "../../components/ui";
+import { Empty, ErrorNote, Loading, Modal, PolicyCheckPanel, Ring, ScoreBreakdown, SkillChip, scoreColor, useToast } from "../../components/ui";
 
 const STATUS_TONE = { applied: "petal", shortlisted: "teal", interview: "amber", offered: "teal", rejected: "red" };
 
@@ -141,7 +141,10 @@ export default function RecruiterCandidates() {
                 <div className="text-center font-mono text-[11px] text-plum/50">contact visible after shortlist</div>
               )}
             </div>
-            <ScoreBreakdown match={open} />
+            <div className="grid gap-3">
+              <ScoreBreakdown match={open} />
+              <PolicyCheckPanel postingId={postingId} studentId={open.student_id} />
+            </div>
           </div>
         )}
       </Modal>

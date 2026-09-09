@@ -121,6 +121,46 @@ class Company(Base):
     postings: Mapped[list["Posting"]] = relationship(back_populates="company")
 
 
+class CompanyDocument(Base):
+    """A policy PDF (T&C, eligibility rules, etc.) a recruiter uploaded for their company."""
+
+    __tablename__ = "company_documents"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    company_id: Mapped[int] = mapped_column(ForeignKey("companies.id", ondelete="CASCADE"), index=True)
+    filename: Mapped[str] = mapped_column(String(255))
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    chunks: Mapped[list["DocumentChunk"]] = relationship(back_populates="document", cascade="all, delete-orphan")
+
+
+class DocumentChunk(Base):
+    """One chunk of text from an uploaded company policy document.
+
+    No embedding is stored here on purpose: a recruiter's document set is
+    tiny (a handful of files, a few dozen chunks), so a TF-IDF vector is
+    cheap to build fresh at query time straight from this text column (see
+    app/rag.py). That avoids ever serving a stale vector after a document
+    is added or removed, and needs no extra migration if the retrieval
+    method ever changes.
+
+    company_id is denormalized here (it is also reachable via document.
+    company_id) so every retrieval query can filter on one indexed column
+    with no join -- that single filter is what keeps one company's policy
+    text from ever being retrieved for another company's candidates.
+    """
+
+    __tablename__ = "document_chunks"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    document_id: Mapped[int] = mapped_column(ForeignKey("company_documents.id", ondelete="CASCADE"), index=True)
+    company_id: Mapped[int] = mapped_column(ForeignKey("companies.id", ondelete="CASCADE"), index=True)
+    chunk_index: Mapped[int] = mapped_column(Integer)
+    text: Mapped[str] = mapped_column(Text)
+
+    document: Mapped[CompanyDocument] = relationship(back_populates="chunks")
+
+
 class Posting(Base):
     __tablename__ = "postings"
 
@@ -166,6 +206,7 @@ class Application(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
     student: Mapped[Student] = relationship(back_populates="applications")
+ ai
     posting: Mapped[Posting] = relationship(back_populates="applications")
 
 
@@ -188,3 +229,6 @@ class VerificationRequest(Base):
     student: Mapped[Student] = relationship(back_populates="verification_requests")
     skill: Mapped[Skill] = relationship()
     reviewer: Mapped[User | None] = relationship(foreign_keys=[reviewed_by])
+
+    posting: Mapped[Posting] = relationship(back_populates="applications")
+ main

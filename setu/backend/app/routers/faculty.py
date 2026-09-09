@@ -1,3 +1,6 @@
+import time
+from threading import Lock
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
@@ -31,6 +34,24 @@ from ..schemas import (
 from .students import invalidate_score_cache, profile_out
 
 router = APIRouter(prefix="/faculty", tags=["placement coordinator"], dependencies=[Depends(require_role("faculty"))])
+FACULTY_CACHE_TTL_SECONDS = 60
+_analytics_cache: dict[int | None, tuple[float, AnalyticsOut]] = {}
+_students_cache: dict[int | None, tuple[float, tuple[FacultyStudentOut, ...]]] = {}
+_faculty_cache_lock = Lock()
+
+
+def clear_faculty_cache() -> None:
+    with _faculty_cache_lock:
+        _analytics_cache.clear()
+        _students_cache.clear()
+
+
+def cached_faculty(cache: dict, key: int | None):
+    with _faculty_cache_lock:
+        entry = cache.get(key)
+        if entry is not None and time.monotonic() - entry[0] < FACULTY_CACHE_TTL_SECONDS:
+            return entry[1]
+    return None
 
 
 def readiness_of(held, postings_requirements, adjacency=None, top: int = 5) -> float:
@@ -42,6 +63,9 @@ def readiness_of(held, postings_requirements, adjacency=None, top: int = 5) -> f
 
 @router.get("/analytics", response_model=AnalyticsOut)
 def analytics(batch_id: int | None = None, db: Session = Depends(get_db)):
+    cached = cached_faculty(_analytics_cache, batch_id)
+    if cached is not None:
+        return cached
     batch_name = "All batches"
     if batch_id is not None:
         batch = db.get(Batch, batch_id)
@@ -69,7 +93,7 @@ def analytics(batch_id: int | None = None, db: Session = Depends(get_db)):
             buckets["at_risk"] += 1
 
     gaps = cohort_gaps(cohort, postings_requirements, skill_name_map(db))
-    return AnalyticsOut(
+    result = AnalyticsOut(
         batch_id=batch_id,
         batch=batch_name,
         student_count=len(students),
@@ -80,10 +104,16 @@ def analytics(batch_id: int | None = None, db: Session = Depends(get_db)):
         gaps=gaps[:12],
         strengths=sorted(gaps, key=lambda item: item["gap"])[:6],
     )
+    with _faculty_cache_lock:
+        _analytics_cache[batch_id] = (time.monotonic(), result)
+    return result
 
 
 @router.get("/students", response_model=list[FacultyStudentOut])
 def list_students(batch_id: int | None = None, db: Session = Depends(get_db)):
+    cached = cached_faculty(_students_cache, batch_id)
+    if cached is not None:
+        return list(cached)
     students = students_in_batch(db, batch_id)
     student_ids = [student.id for student in students]
     cohort = held_skills_for_students(db, student_ids)
@@ -107,6 +137,8 @@ def list_students(batch_id: int | None = None, db: Session = Depends(get_db)):
             )
         )
     rows.sort(key=lambda row: row.readiness, reverse=True)
+    with _faculty_cache_lock:
+        _students_cache[batch_id] = (time.monotonic(), tuple(rows))
     return rows
 
 
@@ -139,6 +171,7 @@ def add_student(body: FacultyStudentCreate, db: Session = Depends(get_db)):
     student = Student(user_id=user.id, batch_id=batch.id, roll_number=body.roll_number, cgpa=body.cgpa)
     db.add(student)
     db.commit()
+    clear_faculty_cache()
     return FacultyStudentOut(
         id=student.id,
         full_name=user.full_name,
@@ -167,6 +200,7 @@ def edit_student(student_id: int, body: FacultyStudentUpdate, db: Session = Depe
             raise HTTPException(404, "Batch not found")
         student.batch_id = body.batch_id
     db.commit()
+    clear_faculty_cache()
     return profile_out(student_with_skills(db, student_id))
 
 
@@ -178,14 +212,17 @@ def verify_skill(student_id: int, skill_id: int, verified: bool = True, faculty:
     link.verified = verified
     link.verified_by = faculty.id if verified else None
     db.commit()
+    clear_faculty_cache()
     return profile_out(student_with_skills(db, student_id))
 
 
 @router.post("/market/refresh", response_model=MarketRefreshOut)
 def market_refresh(db: Session = Depends(get_db)):
     imported, skipped = refresh_market_postings(db)
+    clear_faculty_cache()
     total = db.scalar(select(func.count(Posting.id)).where(Posting.source == "market", Posting.active.is_(True)))
     return MarketRefreshOut(imported=imported, skipped=skipped, total_market_postings=total)
+ ai
 
 
 def serialize_queue_item(req: VerificationRequest) -> FacultyVerificationQueueOut:
@@ -286,3 +323,7 @@ def review_verification_request(
     db.commit()
     db.refresh(req)
     return serialize_queue_item(req)
+
+import time
+from threading import Lock
+ main

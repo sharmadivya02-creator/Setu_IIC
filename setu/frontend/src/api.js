@@ -43,6 +43,7 @@ async function request(method, path, body) {
 const get = (path) => request("GET", path);
 const post = (path, body) => request("POST", path, body);
 const put = (path, body) => request("PUT", path, body);
+const del = (path) => request("DELETE", path);
 
 async function upload(path, formData) {
   const headers = {};
@@ -104,4 +105,13 @@ export const api = {
   shortlist: (postingId, studentId) => post(`/recruiters/postings/${postingId}/shortlist/${studentId}`),
   postingApplications: (postingId) => get(`/recruiters/postings/${postingId}/applications`),
   setStatus: (applicationId, status) => put(`/recruiters/applications/${applicationId}/status`, { status }),
+
+  uploadPolicyDocument: (file) => {
+    const form = new FormData();
+    form.append("file", file);
+    return upload("/recruiters/company/documents", form);
+  },
+  listPolicyDocuments: () => get("/recruiters/company/documents"),
+  deletePolicyDocument: (documentId) => del(`/recruiters/company/documents/${documentId}`),
+  policyCheck: (postingId, studentId) => get(`/recruiters/postings/${postingId}/candidates/${studentId}/policy-check`),
 };

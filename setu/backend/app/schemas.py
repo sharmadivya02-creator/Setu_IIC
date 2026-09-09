@@ -253,6 +253,7 @@ class ResumeParseResponse(BaseModel):
     total_detected: int
 
 
+ai
 class VerificationRequestCreate(BaseModel):
     skill_id: int
     course_name: str | None = None
@@ -307,3 +308,22 @@ class FacultyVerificationQueueOut(BaseModel):
 class PendingCountOut(BaseModel):
     pending_count: int
 
+class CompanyDocumentOut(BaseModel):
+    id: int
+    filename: str
+    uploaded_at: datetime
+    chunk_count: int
+
+
+class PolicyVerdictOut(BaseModel):
+    rule: str
+    verdict: str
+    evidence_snippet: str
+    source_chunk_id: int | None = None
+
+
+class PolicyCheckResponse(BaseModel):
+    candidate_name: str
+    posting_title: str
+    verdicts: list[PolicyVerdictOut]
+main

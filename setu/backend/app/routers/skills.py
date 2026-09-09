@@ -1,3 +1,6 @@
+import time
+from threading import Lock
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -8,10 +11,26 @@ from ..schemas import BatchOut, RelatedSkillOut, SkillOut
 
 router = APIRouter(tags=["reference"])
 
+SKILLS_CACHE_TTL_SECONDS = 300
+_skills_cache: tuple[float, tuple[SkillOut, ...]] | None = None
+_skills_cache_lock = Lock()
+
 
 @router.get("/skills", response_model=list[SkillOut])
 def list_skills(db: Session = Depends(get_db)):
-    return db.scalars(select(Skill).order_by(Skill.category, Skill.name)).all()
+    global _skills_cache
+
+    now = time.monotonic()
+    with _skills_cache_lock:
+        if _skills_cache is None or now - _skills_cache[0] >= SKILLS_CACHE_TTL_SECONDS:
+            _skills_cache = (
+                now,
+                tuple(
+                    SkillOut(id=skill.id, name=skill.name, category=skill.category)
+                    for skill in db.scalars(select(Skill).order_by(Skill.category, Skill.name))
+                ),
+            )
+        return list(_skills_cache[1])
 
 
 @router.get("/skills/{skill_id}/related", response_model=list[RelatedSkillOut])

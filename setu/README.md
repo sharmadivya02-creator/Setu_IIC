@@ -2,7 +2,9 @@
 
 Skill-mapping and placement platform. Students build a structured skill profile, faculty see batch-level skill gaps against live market demand, recruiters get ranked candidates. One matching engine (`backend/app/engine.py`) powers all three views.
 
-## Demo logins (password for all: `setu1234`)
+## Demo logins
+
+The seeded demo accounts all use the password `setu1234`:
 
 | Role      | Email                 |
 |-----------|-----------------------|
@@ -10,23 +12,27 @@ Skill-mapping and placement platform. Students build a structured skill profile,
 | Faculty   | faculty@setu.demo     |
 | Recruiter | recruiter@setu.demo   |
 
-## Run locally (Windows, no Docker)
+## Run locally without Docker
 
-Requirements: Python 3.11+, Node 20+, a Postgres connection string (Neon free tier works).
+Requirements: Python 3.11, Node 20+, and a PostgreSQL connection string. Neon works for both development and production.
 
-Backend, in one terminal:
+### Backend
 
-```
+From the repository root, run these commands in PowerShell:
+
+```powershell
 cd backend
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
-copy .env.example .env
+Copy-Item .env.example .env
 ```
 
-Open `backend\.env`, paste your Neon connection string into `DATABASE_URL`, set any long random `JWT_SECRET`. Then:
+Edit `backend\.env` and set `DATABASE_URL` to your Neon connection string. Replace `JWT_SECRET` with a long random value. Keep `.env` private and never commit it.
 
-```
+Then, from the `backend` directory:
+
+```powershell
 alembic upgrade head
 python seed.py
 uvicorn app.main:app --reload
@@ -34,15 +40,35 @@ uvicorn app.main:app --reload
 
 API docs: http://localhost:8000/docs
 
-Frontend, in a second terminal:
+### Frontend
 
-```
+In a second PowerShell terminal, from the repository root:
+
+```powershell
 cd frontend
 npm install
 npm run dev
 ```
 
-App: http://localhost:5173
+Open the app at http://localhost:5173. The Vite development proxy forwards `/api` requests to the backend on port `8000`.
+
+### Tests
+
+From the `backend` directory:
+
+```powershell
+pip install -r requirements-dev.txt
+pytest
+```
+
+### Optional skill-vector generation
+
+The checked-in `backend/app/data/skill_vectors.json` is enough for normal runtime use. Only install this extra dependency if you need to regenerate vectors:
+
+```powershell
+pip install sentence-transformers==3.3.1
+python scripts/generate_skill_vectors.py
+```
 
 ## Run with Docker
 
@@ -54,7 +80,7 @@ JWT_SECRET=<long-random-secret>
 CORS_ORIGINS=http://localhost:5173,http://localhost:8080
 ```
 
-Docker loads these values into the backend. The local Postgres container remains available as a fallback only when `DATABASE_URL` points to `db:5432`.
+Docker loads these values into the backend. The local `db` container still starts, but it is not used when `DATABASE_URL` points to Neon.
 
 ```
 docker compose up --build
@@ -70,6 +96,12 @@ docker compose exec backend python seed.py
 ```
 
 `seed.py` replaces existing demo/application data, so run it only for a fresh database or when you intentionally want to reset seeded data.
+
+To use Docker's local PostgreSQL instead of Neon, set this value in `backend/.env`:
+
+```env
+DATABASE_URL=postgresql://setu:setu@db:5432/setu
+```
 
 ## Deploy to a public URL
 

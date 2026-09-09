@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../api";
 import { ErrorNote, LEVEL_NAMES, LevelDots, Loading, Modal, SkillChip, useToast } from "../../components/ui";
+import { getCachedSampleResume } from "../../utils/sampleResume";
 
 export default function StudentSkills() {
   const [taxonomy, setTaxonomy] = useState(null);
@@ -22,6 +23,9 @@ export default function StudentSkills() {
   const fileInputRef = useRef(null);
 
   useEffect(() => {
+    // Pre-warm cached sample resume in memory on mount for instantaneous zero-delay access
+    getCachedSampleResume();
+
     Promise.all([api.skills(), api.studentProfile()])
       .then(([skills, profileData]) => {
         setTaxonomy(skills);
@@ -90,6 +94,17 @@ export default function StudentSkills() {
       event.target.value = "";
       processResumeFile(file);
     }
+  }
+
+  async function handleAutoUploadSample() {
+    if (uploadingResume || saving) return;
+    const sampleFile = getCachedSampleResume();
+    if (!sampleFile) {
+      showToast("Sample resume could not be prepared", "error");
+      return;
+    }
+    showToast("Loaded pre-cached sample resume (Aarav Sharma) · Sending to AI parser...");
+    await processResumeFile(sampleFile);
   }
 
   function handleDragOver(event) {
@@ -256,6 +271,15 @@ export default function StudentSkills() {
               </span>
             )}
           </button>
+          <button
+            type="button"
+            className="btn-secondary border-plum/30 bg-plum/5 hover:bg-plum/10 text-plum font-medium shadow-xs"
+            onClick={handleAutoUploadSample}
+            disabled={uploadingResume || saving}
+            title="Auto-upload pre-loaded sample resume (Aarav Sharma) to demonstrate instant Groq AI extraction"
+          >
+            <span>Try Sample Resume</span>
+          </button>
           <button type="button" className="btn-primary" onClick={save} disabled={saving || uploadingResume}>
             {saving ? "saving" : `Save ${selected.length} skills`}
           </button>
@@ -305,6 +329,15 @@ export default function StudentSkills() {
                   disabled={uploadingResume}
                 >
                   Upload Resume PDF
+                </button>
+                <button
+                  type="button"
+                  className="btn-secondary border-plum/30 bg-plum/5 text-xs hover:bg-plum/10 font-medium"
+                  onClick={handleAutoUploadSample}
+                  disabled={uploadingResume}
+                  title="Auto-fill with sample resume for instant demonstration"
+                >
+                  Try Sample Resume
                 </button>
               </div>
             </div>
